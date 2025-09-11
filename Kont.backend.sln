@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35514.174
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{342E4FF6-DDC7-4F4E-AF1D-916BAE1ED12F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{2E64217F-9C09-4382-938A-AF2828F21A8A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "kont.backend", "src\kont.backend\kont.backend.csproj", "{BFCC0FF8-86A7-42FE-B50F-CB0C58DFC2E5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "kont.backend.tests", "tests\kont.backend.tests\kont.backend.tests.csproj", "{0D1EF00C-5E92-407D-B9CB-BFF9191C7019}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BFCC0FF8-86A7-42FE-B50F-CB0C58DFC2E5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BFCC0FF8-86A7-42FE-B50F-CB0C58DFC2E5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BFCC0FF8-86A7-42FE-B50F-CB0C58DFC2E5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BFCC0FF8-86A7-42FE-B50F-CB0C58DFC2E5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0D1EF00C-5E92-407D-B9CB-BFF9191C7019}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0D1EF00C-5E92-407D-B9CB-BFF9191C7019}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0D1EF00C-5E92-407D-B9CB-BFF9191C7019}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0D1EF00C-5E92-407D-B9CB-BFF9191C7019}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{BFCC0FF8-86A7-42FE-B50F-CB0C58DFC2E5} = {342E4FF6-DDC7-4F4E-AF1D-916BAE1ED12F}
+		{0D1EF00C-5E92-407D-B9CB-BFF9191C7019} = {2E64217F-9C09-4382-938A-AF2828F21A8A}
+	EndGlobalSection
+EndGlobal

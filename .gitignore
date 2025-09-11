@@ -1,0 +1,6 @@
+﻿.vscode
+.vs
+tests/Kont.backend.tests/obj
+tests/Kont.backend.tests/bin
+src/Kont.backend/bin
+src/Kont.backend/obj
