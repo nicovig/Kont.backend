@@ -46,7 +46,6 @@
 
   <ItemGroup>
     <Folder Include="Examples\" />
-    <Folder Include="Migrations\" />
   </ItemGroup>
 
 </Project>

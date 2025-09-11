@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Kont.backend.DAL.DatabaseContext;
 using Kont.backend.Models.User;
 using Kont.backend.Services;
@@ -9,16 +9,16 @@ namespace Kont.backend.Controllers;
 
 [Route("[controller]")]
 [ApiController]
-public class AuthController : ControllerBase
+public class GodController : ControllerBase
 {
     private readonly IDatabaseContext _context;
     private readonly IPasswordService _passwordService;
-    private readonly ILogger<AuthController> _logger;
+    private readonly ILogger<GodController> _logger;
 
-    public AuthController(
+    public GodController(
         IDatabaseContext context,
         IPasswordService passwordService,
-        ILogger<AuthController> logger)
+        ILogger<GodController> logger)
     {
         _context = context;
         _passwordService = passwordService;
@@ -41,15 +41,17 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var administrator = await _context.Administrator.Include(a => a.Role)
-                                                            .Include(a => a.Subscription)
-                                                            .Include(a => a.Manager)
-                                                            .Include(a => a.Sites)
-                                                            .FirstOrDefaultAsync(a => a.Email == request.Email);
+            var administrator = await _context.Administrator.FirstOrDefaultAsync(a => a.Email == request.Email);
+
             if (administrator == null)
             {
                 _logger.LogWarning("Login attempt with non-existent email: {Email}", request.Email);
                 return Unauthorized(new { message = "Invalid credentials" });
+            }
+
+            if (administrator.Role.RoleType != RoleType.God)
+            {
+                return Unauthorized();
             }
 
 
