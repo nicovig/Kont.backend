@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Kont.backend.DAL.DatabaseContext;
 using Kont.backend.DAL;
-using Microsoft.EntityFrameworkCore;
 using Kont.backend.Models.Scoring;
+using Kont.backend.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace Kont.backend.Controllers;
 
@@ -10,14 +11,14 @@ namespace Kont.backend.Controllers;
 [ApiController]
 public class PoolsController : ControllerBase
 {
-    private readonly IDatabaseContext _context;
+    private readonly IPoolsService _poolsService;
     private readonly ILogger<PoolsController> _logger;
 
     public PoolsController(
-        IDatabaseContext context,
+        IPoolsService poolsService,
         ILogger<PoolsController> logger)
     {
-        _context = context;
+        _poolsService = poolsService;
         _logger = logger;
     }
 
@@ -34,13 +35,9 @@ public class PoolsController : ControllerBase
     {
         try
         {
-            var pools = await _context.Pool
-                .Include(p => p.Event)
-                .Include(p => p.PlayerRegistrations)
-                .Include(p => p.GameSessions)
-                .ToListAsync();
+            var pools = await _poolsService.GetPoolsAsync();
 
-            _logger.LogInformation("Retrieved {Count} pools", pools.Count);
+            _logger.LogInformation("Retrieved {Count} pools", pools.Count());
             return Ok(pools);
         }
         catch (Exception ex)
@@ -66,11 +63,7 @@ public class PoolsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool
-                .Include(p => p.Event)
-                .Include(p => p.PlayerRegistrations)
-                .Include(p => p.GameSessions)
-                .FirstOrDefaultAsync(p => p.Id == id);
+            var pool = await _poolsService.GetPoolByIdAsync(id);
 
             if (pool == null)
             {
@@ -108,16 +101,11 @@ public class PoolsController : ControllerBase
                 return BadRequest(ModelState);
             }
 
-            pool.Id = Guid.NewGuid();
-            pool.CreatedAt = DateTime.UtcNow;
-            pool.QrCode = GenerateQRCode(pool.Id);
+            var createdPool = await _poolsService.CreatePoolAsync(pool);
 
-            _context.Pool.Add(pool);
-            await _context.SaveChangesAsync();
+            _logger.LogInformation("Created pool {Id} with name {Name}", createdPool.Id, createdPool.Name);
 
-            _logger.LogInformation("Created pool {Id} with name {Name}", pool.Id, pool.Name);
-
-            return CreatedAtAction(nameof(GetPool), new { id = pool.Id }, pool);
+            return CreatedAtAction(nameof(GetPool), new { id = createdPool.Id }, createdPool);
         }
         catch (Exception ex)
         {
@@ -155,23 +143,15 @@ public class PoolsController : ControllerBase
                 return BadRequest(ModelState);
             }
 
-            var existingPool = await _context.Pool.FindAsync(id);
-            if (existingPool == null)
+            var updatedPool = await _poolsService.UpdatePoolAsync(id, pool);
+            if (updatedPool == null)
             {
                 _logger.LogWarning("Pool with ID {Id} not found for update", id);
                 return NotFound(new { message = "Pool not found" });
             }
 
-            existingPool.Name = pool.Name;
-            existingPool.Description = pool.Description;
-            existingPool.Event = pool.Event;
-            existingPool.IsActive = pool.IsActive;
-            existingPool.IsAllPlayersPresent = pool.IsAllPlayersPresent;
-
-            await _context.SaveChangesAsync();
-
             _logger.LogInformation("Updated pool {Id}", id);
-            return Ok(existingPool);
+            return Ok(updatedPool);
         }
         catch (Exception ex)
         {
@@ -196,15 +176,12 @@ public class PoolsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool.FindAsync(id);
-            if (pool == null)
+            var success = await _poolsService.DeletePoolAsync(id);
+            if (!success)
             {
                 _logger.LogWarning("Pool with ID {Id} not found for deletion", id);
                 return NotFound(new { message = "Pool not found" });
             }
-
-            _context.Pool.Remove(pool);
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Deleted pool {Id}", id);
             return NoContent();
@@ -232,26 +209,12 @@ public class PoolsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool
-                .Include(p => p.PlayerRegistrations)
-                .Include(p => p.GameSessions)
-                .FirstOrDefaultAsync(p => p.Id == id);
-
-            if (pool == null)
+            var stats = await _poolsService.GetPoolStatsAsync(id);
+            if (stats == null)
             {
                 _logger.LogWarning("Pool with ID {Id} not found for stats", id);
                 return NotFound(new { message = "Pool not found" });
             }
-
-            var stats = new PoolStats
-            {
-                TotalPlayers = pool.PlayerRegistrations.Count,
-                RegisteredPlayers = pool.PlayerRegistrations.Count,
-                CheckedInPlayers = pool.PlayerRegistrations.Count(p => p.CheckedInAt.HasValue),
-                ActiveSessions = pool.GameSessions.Count(g => g.Status == GameSessionStatus.Active),
-                CompletedSessions = pool.GameSessions.Count(g => g.Status == GameSessionStatus.Completed),
-                TotalActivities = pool.GameSessions.Select(g => g.Activity).Distinct().Count()
-            };
 
             return Ok(stats);
         }
@@ -278,15 +241,12 @@ public class PoolsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool.FindAsync(id);
-            if (pool == null)
+            var success = await _poolsService.ValidateAllPlayersPresentAsync(id);
+            if (!success)
             {
                 _logger.LogWarning("Pool with ID {Id} not found for player validation", id);
                 return NotFound(new { message = "Pool not found" });
             }
-
-            pool.IsAllPlayersPresent = true;
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Validated all players present for pool {Id}", id);
             return Ok(new { message = "All players validated as present" });
@@ -314,16 +274,12 @@ public class PoolsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool.FindAsync(id);
-            if (pool == null)
+            var success = await _poolsService.EndPoolAsync(id);
+            if (!success)
             {
                 _logger.LogWarning("Pool with ID {Id} not found for ending", id);
                 return NotFound(new { message = "Pool not found" });
             }
-
-            pool.Status = PoolStatus.Completed;
-            pool.EndedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Ended pool {Id}", id);
             return Ok(new { message = "Pool ended successfully" });
@@ -351,18 +307,16 @@ public class PoolsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool
-                .Include(p => p.PlayerRegistrations)
-                .ThenInclude(pr => pr.Player)
-                .FirstOrDefaultAsync(p => p.Id == id);
+            var players = await _poolsService.GetPoolPlayersAsync(id);
+            var playersList = players.ToList();
 
-            if (pool == null)
+            if (!playersList.Any())
             {
                 _logger.LogWarning("Pool with ID {Id} not found for players", id);
                 return NotFound(new { message = "Pool not found" });
             }
 
-            return Ok(pool.PlayerRegistrations);
+            return Ok(players);
         }
         catch (Exception ex)
         {
@@ -388,24 +342,15 @@ public class PoolsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool.FindAsync(id);
-            if (pool == null)
-            {
-                _logger.LogWarning("Pool with ID {Id} not found for recovery QR", id);
-                return NotFound(new { message = "Pool not found" });
-            }
-
-            var player = await _context.Player.FindAsync(playerId);
-            if (player == null)
-            {
-                _logger.LogWarning("Player with ID {PlayerId} not found for recovery QR", playerId);
-                return NotFound(new { message = "Player not found" });
-            }
-
-            var qrCode = GenerateRecoveryQRCode(id, playerId);
+            var qrCode = await _poolsService.GenerateRecoveryQRAsync(id, playerId);
 
             _logger.LogInformation("Generated recovery QR for player {PlayerId} in pool {PoolId}", playerId, id);
             return Ok(new { qrCode });
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning("Failed to generate recovery QR for player {PlayerId} in pool {PoolId}: {Message}", playerId, id, ex.Message);
+            return NotFound(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -414,17 +359,6 @@ public class PoolsController : ControllerBase
         }
     }
 
-    private string GenerateQRCode(Guid poolId)
-    {
-        // TODO: Implement actual QR code generation
-        return $"POOL_{poolId:N}";
-    }
-
-    private string GenerateRecoveryQRCode(Guid poolId, Guid playerId)
-    {
-        // TODO: Implement actual recovery QR code generation
-        return $"RECOVERY_{poolId:N}_{playerId:N}";
-    }
 }
 
 public class PoolStats

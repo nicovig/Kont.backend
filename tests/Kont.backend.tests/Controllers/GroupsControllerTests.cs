@@ -5,22 +5,23 @@ using NSubstitute;
 using Kont.backend.Controllers;
 using Kont.backend.DAL;
 using Kont.backend.DAL.DatabaseContext;
+using Kont.backend.Services;
 
 namespace Kont.backend.tests.Controllers;
 
 [TestFixture]
 public class GroupsControllerTests
 {
-    private IDatabaseContext _mockContext;
+    private IGroupsService _mockGroupsService;
     private ILogger<GroupsController> _mockLogger;
     private GroupsController _controller;
 
     [SetUp]
     public void Setup()
     {
-        _mockContext = Substitute.For<IDatabaseContext>();
+        _mockGroupsService = Substitute.For<IGroupsService>();
         _mockLogger = Substitute.For<ILogger<GroupsController>>();
-        _controller = new GroupsController(_mockContext, _mockLogger);
+        _controller = new GroupsController(_mockGroupsService, _mockLogger);
     }
 
     [Test]
@@ -31,39 +32,18 @@ public class GroupsControllerTests
         var playerId = Guid.NewGuid();
         var groupId = Guid.NewGuid();
 
-        var pool = new Pool { Id = poolId, Name = "Test Pool" };
-        var player = new Player { Id = playerId, Username = "TestPlayer" };
-        var playerRegistration = new PlayerRegistration 
-        { 
-            Id = Guid.NewGuid(), 
-            Player = player, 
-            Pool = pool 
-        };
-        var newGroup = new PlayerGroup 
-        { 
-            Id = groupId, 
-            GroupNumber = 1,
-            GameSession = new GameSession { Pool = pool }
-        };
-
         var request = new UpdatePlayerGroupRequest { GroupId = groupId.ToString() };
 
-        var mockPoolDbSet = CreateMockDbSet(new List<Pool> { pool });
-        var mockPlayerRegistrationDbSet = CreateMockDbSet(new List<PlayerRegistration> { playerRegistration });
-        var mockPlayerGroupDbSet = CreateMockDbSet(new List<PlayerGroup> { newGroup });
-
-        _mockContext.Pool.Returns(mockPoolDbSet);
-        _mockContext.PlayerRegistration.Returns(mockPlayerRegistrationDbSet);
-        _mockContext.PlayerGroup.Returns(mockPlayerGroupDbSet);
-        _mockContext.SaveChangesAsync().Returns(1);
+        _mockGroupsService.UpdatePlayerGroupAsync(poolId, playerId, groupId.ToString()).Returns(true);
 
         // Act
         var result = await _controller.UpdatePlayerGroup(poolId, playerId, request);
 
         // Assert
-        Assert.That(result, Is.InstanceOf<OkObjectResult>());
-        var okResult = (OkObjectResult)result;
-        Assert.That(okResult.Value, Is.Not.Null);
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(200));
+        Assert.That(objectResult.Value, Is.Not.Null);
     }
 
     [Test]
@@ -74,14 +54,15 @@ public class GroupsControllerTests
         var playerId = Guid.NewGuid();
         var request = new UpdatePlayerGroupRequest { GroupId = Guid.NewGuid().ToString() };
 
-        var mockPoolDbSet = CreateMockDbSet(new List<Pool>());
-        _mockContext.Pool.Returns(mockPoolDbSet);
+        _mockGroupsService.UpdatePlayerGroupAsync(poolId, playerId, request.GroupId).Returns(false);
 
         // Act
         var result = await _controller.UpdatePlayerGroup(poolId, playerId, request);
 
         // Assert
-        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(404));
     }
 
     [Test]
@@ -97,20 +78,17 @@ public class GroupsControllerTests
             new PlayerGroup { Id = Guid.NewGuid(), GroupNumber = 2, GameSession = gameSession }
         };
 
-        var mockPoolDbSet = CreateMockDbSet(new List<Pool> { pool });
-        var mockPlayerGroupDbSet = CreateMockDbSet(groups);
-
-        _mockContext.Pool.Returns(mockPoolDbSet);
-        _mockContext.PlayerGroup.Returns(mockPlayerGroupDbSet);
+        _mockGroupsService.GetPoolGroupsAsync(poolId).Returns(groups);
 
         // Act
         var result = await _controller.GetPoolGroups(poolId);
 
         // Assert
-        Assert.That(result, Is.InstanceOf<OkObjectResult>());
-        var okResult = (OkObjectResult)result;
-        Assert.That(okResult.Value, Is.AssignableFrom<IEnumerable<PlayerGroup>>());
-        var returnedGroups = (IEnumerable<PlayerGroup>)okResult.Value;
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(200));
+        Assert.That(objectResult.Value, Is.InstanceOf<IEnumerable<PlayerGroup>>());
+        var returnedGroups = (IEnumerable<PlayerGroup>)objectResult.Value;
         Assert.That(returnedGroups.Count(), Is.EqualTo(2));
     }
 
@@ -129,14 +107,16 @@ public class GroupsControllerTests
             GroupNumber = 1 
         };
 
-        var mockPoolDbSet = CreateMockDbSet(new List<Pool> { pool });
-        var mockGameSessionDbSet = CreateMockDbSet(new List<GameSession> { gameSession });
-        var mockPlayerGroupDbSet = Substitute.For<DbSet<PlayerGroup>>();
+        var createdGroup = new PlayerGroup
+        {
+            Id = Guid.NewGuid(),
+            GroupNumber = 1,
+            GameSession = gameSession,
+            CreatedAt = DateTime.UtcNow,
+            Players = new List<PlayerRegistration>()
+        };
 
-        _mockContext.Pool.Returns(mockPoolDbSet);
-        _mockContext.GameSession.Returns(mockGameSessionDbSet);
-        _mockContext.PlayerGroup.Returns(mockPlayerGroupDbSet);
-        _mockContext.SaveChangesAsync().Returns(1);
+        _mockGroupsService.CreatePlayerGroupAsync(poolId, gameSessionId.ToString(), 1).Returns(createdGroup);
 
         // Act
         var result = await _controller.CreatePlayerGroup(poolId, request);
@@ -155,16 +135,8 @@ public class GroupsControllerTests
         // Arrange
         var poolId = Guid.NewGuid();
         var groupId = Guid.NewGuid();
-        var pool = new Pool { Id = poolId, Name = "Test Pool" };
-        var gameSession = new GameSession { Id = Guid.NewGuid(), Pool = pool };
-        var group = new PlayerGroup { Id = groupId, GameSession = gameSession };
 
-        var mockPoolDbSet = CreateMockDbSet(new List<Pool> { pool });
-        var mockPlayerGroupDbSet = CreateMockDbSet(new List<PlayerGroup> { group });
-
-        _mockContext.Pool.Returns(mockPoolDbSet);
-        _mockContext.PlayerGroup.Returns(mockPlayerGroupDbSet);
-        _mockContext.SaveChangesAsync().Returns(1);
+        _mockGroupsService.DeletePlayerGroupAsync(poolId, groupId).Returns(true);
 
         // Act
         var result = await _controller.DeletePlayerGroup(poolId, groupId);
@@ -173,16 +145,4 @@ public class GroupsControllerTests
         Assert.That(result, Is.InstanceOf<NoContentResult>());
     }
 
-    private DbSet<T> CreateMockDbSet<T>(List<T> data) where T : class
-    {
-        var queryable = data.AsQueryable();
-        var mockDbSet = Substitute.For<DbSet<T>, IQueryable<T>>();
-        
-        ((IQueryable<T>)mockDbSet).Provider.Returns(queryable.Provider);
-        ((IQueryable<T>)mockDbSet).Expression.Returns(queryable.Expression);
-        ((IQueryable<T>)mockDbSet).ElementType.Returns(queryable.ElementType);
-        ((IQueryable<T>)mockDbSet).GetEnumerator().Returns(queryable.GetEnumerator());
-        
-        return mockDbSet;
-    }
 }

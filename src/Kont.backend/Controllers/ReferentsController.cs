@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Kont.backend.DAL.DatabaseContext;
 using Kont.backend.DAL;
+using Kont.backend.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kont.backend.Controllers;
@@ -9,14 +10,14 @@ namespace Kont.backend.Controllers;
 [ApiController]
 public class ReferentsController : ControllerBase
 {
-    private readonly IDatabaseContext _context;
+    private readonly IReferentsService _referentsService;
     private readonly ILogger<ReferentsController> _logger;
 
     public ReferentsController(
-        IDatabaseContext context,
+        IReferentsService referentsService,
         ILogger<ReferentsController> logger)
     {
-        _context = context;
+        _referentsService = referentsService;
         _logger = logger;
     }
 
@@ -44,42 +45,12 @@ public class ReferentsController : ControllerBase
                 return BadRequest(ModelState);
             }
 
-            var pool = await _context.Pool.FindAsync(poolId);
-            if (pool == null)
+            var success = await _referentsService.AssignReferentAsync(poolId, request.ReferentId);
+            if (!success)
             {
-                _logger.LogWarning("Pool with ID {PoolId} not found for referent assignment", poolId);
-                return NotFound(new { message = "Pool not found" });
+                _logger.LogWarning("Failed to assign referent {ReferentId} to pool {PoolId}", request.ReferentId, poolId);
+                return NotFound(new { message = "Pool or referent not found, or referent already assigned" });
             }
-
-            var referent = await _context.Player.FindAsync(Guid.Parse(request.ReferentId));
-            if (referent == null)
-            {
-                _logger.LogWarning("Referent {ReferentId} not found", request.ReferentId);
-                return NotFound(new { message = "Referent not found" });
-            }
-
-            // Check if referent is already assigned to this pool
-            var existingAssignment = await _context.PlayerRegistration
-                .FirstOrDefaultAsync(pr => pr.Player.Id == referent.Id && pr.Pool.Id == poolId);
-
-            if (existingAssignment != null)
-            {
-                _logger.LogWarning("Referent {ReferentId} is already assigned to pool {PoolId}", request.ReferentId, poolId);
-                return BadRequest(new { message = "Referent is already assigned to this pool" });
-            }
-
-            // Create player registration for referent
-            var referentRegistration = new PlayerRegistration
-            {
-                Id = Guid.NewGuid(),
-                Player = referent,
-                Pool = pool,
-                RegisteredAt = DateTime.UtcNow,
-                CheckedInAt = DateTime.UtcNow // Referents are automatically checked in
-            };
-
-            _context.PlayerRegistration.Add(referentRegistration);
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Assigned referent {ReferentId} to pool {PoolId}", request.ReferentId, poolId);
             return Ok(new { message = "Referent assigned successfully" });
@@ -108,25 +79,12 @@ public class ReferentsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool.FindAsync(poolId);
-            if (pool == null)
+            var success = await _referentsService.RemoveReferentAsync(poolId, referentId);
+            if (!success)
             {
-                _logger.LogWarning("Pool with ID {PoolId} not found for referent removal", poolId);
-                return NotFound(new { message = "Pool not found" });
+                _logger.LogWarning("Failed to remove referent {ReferentId} from pool {PoolId}", referentId, poolId);
+                return NotFound(new { message = "Pool or referent not found" });
             }
-
-            var referentRegistration = await _context.PlayerRegistration
-                .Include(pr => pr.Player)
-                .FirstOrDefaultAsync(pr => pr.Player.Id == referentId && pr.Pool.Id == poolId);
-
-            if (referentRegistration == null)
-            {
-                _logger.LogWarning("Referent {ReferentId} not found in pool {PoolId}", referentId, poolId);
-                return NotFound(new { message = "Referent not found in pool" });
-            }
-
-            _context.PlayerRegistration.Remove(referentRegistration);
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Removed referent {ReferentId} from pool {PoolId}", referentId, poolId);
             return Ok(new { message = "Referent removed successfully" });
@@ -154,20 +112,16 @@ public class ReferentsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool.FindAsync(poolId);
-            if (pool == null)
+            var referents = await _referentsService.GetPoolReferentsAsync(poolId);
+            var referentsList = referents.ToList();
+
+            if (!referentsList.Any())
             {
                 _logger.LogWarning("Pool with ID {PoolId} not found for referents", poolId);
                 return NotFound(new { message = "Pool not found" });
             }
 
-            var referents = await _context.PlayerRegistration
-                .Include(pr => pr.Player)
-                .Where(pr => pr.Pool.Id == poolId && pr.Player.PlayerType == PlayerType.KeyPlayer)
-                .Select(pr => pr.Player)
-                .ToListAsync();
-
-            _logger.LogInformation("Retrieved {Count} referents for pool {PoolId}", referents.Count, poolId);
+            _logger.LogInformation("Retrieved {Count} referents for pool {PoolId}", referentsList.Count, poolId);
             return Ok(referents);
         }
         catch (Exception ex)
@@ -194,24 +148,15 @@ public class ReferentsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool.FindAsync(poolId);
-            if (pool == null)
-            {
-                _logger.LogWarning("Pool with ID {PoolId} not found for recovery QR", poolId);
-                return NotFound(new { message = "Pool not found" });
-            }
-
-            var player = await _context.Player.FindAsync(playerId);
-            if (player == null)
-            {
-                _logger.LogWarning("Player with ID {PlayerId} not found for recovery QR", playerId);
-                return NotFound(new { message = "Player not found" });
-            }
-
-            var qrCode = GenerateRecoveryQRCode(poolId, playerId);
+            var qrCode = await _referentsService.GenerateRecoveryQRAsync(poolId, playerId);
 
             _logger.LogInformation("Generated recovery QR for player {PlayerId} in pool {PoolId}", playerId, poolId);
             return Ok(new { qrCode });
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning("Failed to generate recovery QR for player {PlayerId} in pool {PoolId}: {Message}", playerId, poolId, ex.Message);
+            return NotFound(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -220,11 +165,6 @@ public class ReferentsController : ControllerBase
         }
     }
 
-    private string GenerateRecoveryQRCode(Guid poolId, Guid playerId)
-    {
-        // TODO: Implement actual recovery QR code generation
-        return $"RECOVERY_{poolId:N}_{playerId:N}";
-    }
 }
 
 public class AssignReferentRequest

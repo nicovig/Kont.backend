@@ -5,62 +5,50 @@ using NSubstitute;
 using Kont.backend.Controllers;
 using Kont.backend.DAL;
 using Kont.backend.DAL.DatabaseContext;
+using Kont.backend.Models.Dashboard;
+using Kont.backend.Services;
 
 namespace Kont.backend.tests.Controllers;
 
 [TestFixture]
 public class DashboardControllerTests
 {
-    private IDatabaseContext _mockContext;
+    private IDashboardService _mockDashboardService;
     private ILogger<DashboardController> _mockLogger;
     private DashboardController _controller;
 
     [SetUp]
     public void Setup()
     {
-        _mockContext = Substitute.For<IDatabaseContext>();
+        _mockDashboardService = Substitute.For<IDashboardService>();
         _mockLogger = Substitute.For<ILogger<DashboardController>>();
-        _controller = new DashboardController(_mockContext, _mockLogger);
+        _controller = new DashboardController(_mockDashboardService, _mockLogger);
     }
 
     [Test]
     public async Task GetDashboardStats_ReturnsOkResult_WithStats()
     {
         // Arrange
-        var pools = new List<Pool>
+        var expectedStats = new DashboardStats
         {
-            new Pool { Id = Guid.NewGuid(), Status = PoolStatus.Active },
-            new Pool { Id = Guid.NewGuid(), Status = PoolStatus.Pending }
+            TotalPools = 2,
+            ActivePools = 1,
+            TotalPlayers = 2,
+            TotalActivities = 2,
+            RecentActivity = new List<RecentActivity>()
         };
 
-        var playerRegistrations = new List<PlayerRegistration>
-        {
-            new PlayerRegistration { Id = Guid.NewGuid() },
-            new PlayerRegistration { Id = Guid.NewGuid() }
-        };
-
-        var activities = new List<Activity>
-        {
-            new Activity { Id = Guid.NewGuid() },
-            new Activity { Id = Guid.NewGuid() }
-        };
-
-        var mockPoolDbSet = CreateMockDbSet(pools);
-        var mockPlayerRegistrationDbSet = CreateMockDbSet(playerRegistrations);
-        var mockActivityDbSet = CreateMockDbSet(activities);
-
-        _mockContext.Pool.Returns(mockPoolDbSet);
-        _mockContext.PlayerRegistration.Returns(mockPlayerRegistrationDbSet);
-        _mockContext.Activity.Returns(mockActivityDbSet);
+        _mockDashboardService.GetDashboardStatsAsync().Returns(expectedStats);
 
         // Act
         var result = await _controller.GetDashboardStats();
 
         // Assert
-        Assert.That(result, Is.InstanceOf<OkObjectResult>());
-        var okResult = (OkObjectResult)result;
-        Assert.That(okResult.Value, Is.InstanceOf<DashboardStats>());
-        var stats = (DashboardStats)okResult.Value;
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(200));
+        Assert.That(objectResult.Value, Is.InstanceOf<DashboardStats>());
+        var stats = (DashboardStats)objectResult.Value;
         Assert.That(stats.TotalPools, Is.EqualTo(2));
         Assert.That(stats.ActivePools, Is.EqualTo(1));
         Assert.That(stats.TotalPlayers, Is.EqualTo(2));
@@ -71,27 +59,25 @@ public class DashboardControllerTests
     public async Task GetRealTimeUpdates_ReturnsOkResult_WithActivity()
     {
         // Arrange
-        var pools = new List<Pool>
+        var expectedActivity = new RecentActivity
         {
-            new Pool 
-            { 
-                Id = Guid.NewGuid(), 
-                Name = "Test Pool",
-                CreatedAt = DateTime.UtcNow.AddMinutes(-5)
-            }
+            Id = Guid.NewGuid().ToString(),
+            Type = "pool_created",
+            Message = "Nouvelle pool créée: Test Pool",
+            Timestamp = DateTime.UtcNow.AddMinutes(-5)
         };
 
-        var mockPoolDbSet = CreateMockDbSet(pools);
-        _mockContext.Pool.Returns(mockPoolDbSet);
+        _mockDashboardService.GetRealTimeUpdatesAsync().Returns(expectedActivity);
 
         // Act
         var result = await _controller.GetRealTimeUpdates();
 
         // Assert
-        Assert.That(result, Is.InstanceOf<OkObjectResult>());
-        var okResult = (OkObjectResult)result;
-        Assert.That(okResult.Value, Is.InstanceOf<RecentActivity>());
-        var activity = (RecentActivity)okResult.Value;
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(200));
+        Assert.That(objectResult.Value, Is.InstanceOf<RecentActivity>());
+        var activity = (RecentActivity)objectResult.Value;
         Assert.That(activity, Is.Not.Null);
     }
 
@@ -99,36 +85,27 @@ public class DashboardControllerTests
     public async Task GetRealTimeUpdates_WithNoActivity_ReturnsDefaultActivity()
     {
         // Arrange
-        var mockPoolDbSet = CreateMockDbSet(new List<Pool>());
-        var mockPlayerRegistrationDbSet = CreateMockDbSet(new List<PlayerRegistration>());
-        var mockGameSessionDbSet = CreateMockDbSet(new List<GameSession>());
+        var expectedActivity = new RecentActivity
+        {
+            Id = Guid.NewGuid().ToString(),
+            Type = "no_activity",
+            Message = "Aucune activité récente",
+            Timestamp = DateTime.UtcNow
+        };
 
-        _mockContext.Pool.Returns(mockPoolDbSet);
-        _mockContext.PlayerRegistration.Returns(mockPlayerRegistrationDbSet);
-        _mockContext.GameSession.Returns(mockGameSessionDbSet);
+        _mockDashboardService.GetRealTimeUpdatesAsync().Returns(expectedActivity);
 
         // Act
         var result = await _controller.GetRealTimeUpdates();
 
         // Assert
-        Assert.That(result, Is.InstanceOf<OkObjectResult>());
-        var okResult = (OkObjectResult)result;
-        Assert.That(okResult.Value, Is.InstanceOf<RecentActivity>());
-        var activity = (RecentActivity)okResult.Value;
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(200));
+        Assert.That(objectResult.Value, Is.InstanceOf<RecentActivity>());
+        var activity = (RecentActivity)objectResult.Value;
         Assert.That(activity.Type, Is.EqualTo("no_activity"));
         Assert.That(activity.Message, Is.EqualTo("Aucune activité récente"));
     }
 
-    private DbSet<T> CreateMockDbSet<T>(List<T> data) where T : class
-    {
-        var queryable = data.AsQueryable();
-        var mockDbSet = Substitute.For<DbSet<T>, IQueryable<T>>();
-        
-        ((IQueryable<T>)mockDbSet).Provider.Returns(queryable.Provider);
-        ((IQueryable<T>)mockDbSet).Expression.Returns(queryable.Expression);
-        ((IQueryable<T>)mockDbSet).ElementType.Returns(queryable.ElementType);
-        ((IQueryable<T>)mockDbSet).GetEnumerator().Returns(queryable.GetEnumerator());
-        
-        return mockDbSet;
-    }
 }

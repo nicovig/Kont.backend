@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Kont.backend.DAL.DatabaseContext;
 using Kont.backend.DAL;
+using Kont.backend.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kont.backend.Controllers;
@@ -9,14 +10,14 @@ namespace Kont.backend.Controllers;
 [ApiController]
 public class GroupsController : ControllerBase
 {
-    private readonly IDatabaseContext _context;
+    private readonly IGroupsService _groupsService;
     private readonly ILogger<GroupsController> _logger;
 
     public GroupsController(
-        IDatabaseContext context,
+        IGroupsService groupsService,
         ILogger<GroupsController> logger)
     {
-        _context = context;
+        _groupsService = groupsService;
         _logger = logger;
     }
 
@@ -45,50 +46,12 @@ public class GroupsController : ControllerBase
                 return BadRequest(ModelState);
             }
 
-            // Verify pool exists
-            var pool = await _context.Pool.FindAsync(poolId);
-            if (pool == null)
+            var success = await _groupsService.UpdatePlayerGroupAsync(poolId, playerId, request.GroupId);
+            if (!success)
             {
-                _logger.LogWarning("Pool with ID {PoolId} not found for group update", poolId);
-                return NotFound(new { message = "Pool not found" });
+                _logger.LogWarning("Failed to update player {PlayerId} group to {GroupId} in pool {PoolId}", playerId, request.GroupId, poolId);
+                return NotFound(new { message = "Pool, player, or group not found" });
             }
-
-            // Verify player exists and is registered in the pool
-            var playerRegistration = await _context.PlayerRegistration
-                .Include(pr => pr.Player)
-                .FirstOrDefaultAsync(pr => pr.Player.Id == playerId && pr.Pool.Id == poolId);
-
-            if (playerRegistration == null)
-            {
-                _logger.LogWarning("Player {PlayerId} not found in pool {PoolId}", playerId, poolId);
-                return NotFound(new { message = "Player not found in pool" });
-            }
-
-            // Verify new group exists
-            var newGroup = await _context.PlayerGroup
-                .Include(pg => pg.GameSession)
-                .FirstOrDefaultAsync(pg => pg.Id == Guid.Parse(request.GroupId));
-
-            if (newGroup == null)
-            {
-                _logger.LogWarning("Group {GroupId} not found", request.GroupId);
-                return NotFound(new { message = "Group not found" });
-            }
-
-            // Remove player from current groups
-            var currentGroups = await _context.PlayerGroup
-                .Where(pg => pg.Players.Contains(playerRegistration))
-                .ToListAsync();
-
-            foreach (var group in currentGroups)
-            {
-                group.Players.Remove(playerRegistration);
-            }
-
-            // Add player to new group
-            newGroup.Players.Add(playerRegistration);
-
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Updated player {PlayerId} group to {GroupId} in pool {PoolId}", playerId, request.GroupId, poolId);
             return Ok(new { message = "Player group updated successfully" });
@@ -116,21 +79,16 @@ public class GroupsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool.FindAsync(poolId);
-            if (pool == null)
+            var groups = await _groupsService.GetPoolGroupsAsync(poolId);
+            var groupsList = groups.ToList();
+
+            if (!groupsList.Any())
             {
                 _logger.LogWarning("Pool with ID {PoolId} not found for groups", poolId);
                 return NotFound(new { message = "Pool not found" });
             }
 
-            var groups = await _context.PlayerGroup
-                .Include(pg => pg.GameSession)
-                .Include(pg => pg.Players)
-                .ThenInclude(pr => pr.Player)
-                .Where(pg => pg.GameSession.Pool.Id == poolId)
-                .ToListAsync();
-
-            _logger.LogInformation("Retrieved {Count} groups for pool {PoolId}", groups.Count, poolId);
+            _logger.LogInformation("Retrieved {Count} groups for pool {PoolId}", groupsList.Count, poolId);
             return Ok(groups);
         }
         catch (Exception ex)
@@ -164,37 +122,15 @@ public class GroupsController : ControllerBase
                 return BadRequest(ModelState);
             }
 
-            var pool = await _context.Pool.FindAsync(poolId);
-            if (pool == null)
-            {
-                _logger.LogWarning("Pool with ID {PoolId} not found for group creation", poolId);
-                return NotFound(new { message = "Pool not found" });
-            }
-
-            var gameSession = await _context.GameSession
-                .Include(gs => gs.Pool)
-                .FirstOrDefaultAsync(gs => gs.Id == Guid.Parse(request.GameSessionId) && gs.Pool.Id == poolId);
-
-            if (gameSession == null)
-            {
-                _logger.LogWarning("Game session {GameSessionId} not found in pool {PoolId}", request.GameSessionId, poolId);
-                return NotFound(new { message = "Game session not found" });
-            }
-
-            var group = new PlayerGroup
-            {
-                Id = Guid.NewGuid(),
-                GameSession = gameSession,
-                GroupNumber = request.GroupNumber,
-                CreatedAt = DateTime.UtcNow,
-                Players = new List<PlayerRegistration>()
-            };
-
-            _context.PlayerGroup.Add(group);
-            await _context.SaveChangesAsync();
+            var group = await _groupsService.CreatePlayerGroupAsync(poolId, request.GameSessionId, request.GroupNumber);
 
             _logger.LogInformation("Created group {GroupId} with number {GroupNumber} for pool {PoolId}", group.Id, request.GroupNumber, poolId);
             return CreatedAtAction(nameof(GetPoolGroups), new { poolId }, group);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning("Failed to create group for pool {PoolId}: {Message}", poolId, ex.Message);
+            return NotFound(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -220,25 +156,12 @@ public class GroupsController : ControllerBase
     {
         try
         {
-            var pool = await _context.Pool.FindAsync(poolId);
-            if (pool == null)
+            var success = await _groupsService.DeletePlayerGroupAsync(poolId, groupId);
+            if (!success)
             {
-                _logger.LogWarning("Pool with ID {PoolId} not found for group deletion", poolId);
-                return NotFound(new { message = "Pool not found" });
+                _logger.LogWarning("Failed to delete group {GroupId} from pool {PoolId}", groupId, poolId);
+                return NotFound(new { message = "Pool or group not found" });
             }
-
-            var group = await _context.PlayerGroup
-                .Include(pg => pg.GameSession)
-                .FirstOrDefaultAsync(pg => pg.Id == groupId && pg.GameSession.Pool.Id == poolId);
-
-            if (group == null)
-            {
-                _logger.LogWarning("Group {GroupId} not found in pool {PoolId}", groupId, poolId);
-                return NotFound(new { message = "Group not found" });
-            }
-
-            _context.PlayerGroup.Remove(group);
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Deleted group {GroupId} from pool {PoolId}", groupId, poolId);
             return NoContent();

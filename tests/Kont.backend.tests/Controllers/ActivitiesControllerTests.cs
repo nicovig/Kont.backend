@@ -5,22 +5,23 @@ using NSubstitute;
 using Kont.backend.Controllers;
 using Kont.backend.DAL;
 using Kont.backend.DAL.DatabaseContext;
+using Kont.backend.Services;
 
 namespace Kont.backend.tests.Controllers;
 
 [TestFixture]
 public class ActivitiesControllerTests
 {
-    private IDatabaseContext _mockContext;
+    private IActivitiesService _mockActivitiesService;
     private ILogger<ActivitiesController> _mockLogger;
     private ActivitiesController _controller;
 
     [SetUp]
     public void Setup()
     {
-        _mockContext = Substitute.For<IDatabaseContext>();
+        _mockActivitiesService = Substitute.For<IActivitiesService>();
         _mockLogger = Substitute.For<ILogger<ActivitiesController>>();
-        _controller = new ActivitiesController(_mockContext, _mockLogger);
+        _controller = new ActivitiesController(_mockActivitiesService, _mockLogger);
     }
 
     [Test]
@@ -33,14 +34,7 @@ public class ActivitiesControllerTests
             new Activity { Id = Guid.NewGuid(), Name = "Test Activity 2" }
         };
 
-        var mockDbSet = Substitute.For<DbSet<Activity>, IQueryable<Activity>>();
-        var queryable = activities.AsQueryable();
-        ((IQueryable<Activity>)mockDbSet).Provider.Returns(queryable.Provider);
-        ((IQueryable<Activity>)mockDbSet).Expression.Returns(queryable.Expression);
-        ((IQueryable<Activity>)mockDbSet).ElementType.Returns(queryable.ElementType);
-        ((IQueryable<Activity>)mockDbSet).GetEnumerator().Returns(queryable.GetEnumerator());
-        
-        _mockContext.Activity.Returns(mockDbSet);
+        _mockActivitiesService.GetActivitiesAsync().Returns(activities);
 
         // Act
         var result = await _controller.GetActivities();
@@ -58,17 +52,17 @@ public class ActivitiesControllerTests
         var activityId = Guid.NewGuid();
         var activity = new Activity { Id = activityId, Name = "Test Activity" };
 
-        var mockDbSet = CreateMockDbSet(new List<Activity> { activity });
-        _mockContext.Activity.Returns(mockDbSet);
+        _mockActivitiesService.GetActivityByIdAsync(activityId).Returns(activity);
 
         // Act
         var result = await _controller.GetActivity(activityId);
 
         // Assert
-        Assert.That(result, Is.InstanceOf<OkObjectResult>());
-        var okResult = (OkObjectResult)result;
-        Assert.That(okResult.Value, Is.InstanceOf<Activity>());
-        var returnedActivity = (Activity)okResult.Value;
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(200));
+        Assert.That(objectResult.Value, Is.InstanceOf<Activity>());
+        var returnedActivity = (Activity)objectResult.Value;
         Assert.That(returnedActivity.Id, Is.EqualTo(activityId));
     }
 
@@ -77,14 +71,15 @@ public class ActivitiesControllerTests
     {
         // Arrange
         var activityId = Guid.NewGuid();
-        var mockDbSet = CreateMockDbSet(new List<Activity>());
-        _mockContext.Activity.Returns(mockDbSet);
+        _mockActivitiesService.GetActivityByIdAsync(activityId).Returns((Activity?)null);
 
         // Act
         var result = await _controller.GetActivity(activityId);
 
         // Assert
-        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(404));
     }
 
     [Test]
@@ -97,9 +92,15 @@ public class ActivitiesControllerTests
             Description = "Test Description"
         };
 
-        var mockDbSet = Substitute.For<DbSet<Activity>>();
-        _mockContext.Activity.Returns(mockDbSet);
-        _mockContext.SaveChangesAsync().Returns(1);
+        var createdActivity = new Activity
+        {
+            Id = Guid.NewGuid(),
+            Name = "New Activity",
+            Description = "Test Description",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _mockActivitiesService.CreateActivityAsync(activity).Returns(createdActivity);
 
         // Act
         var result = await _controller.CreateActivity(activity);
@@ -118,21 +119,20 @@ public class ActivitiesControllerTests
     {
         // Arrange
         var activityId = Guid.NewGuid();
-        var existingActivity = new Activity { Id = activityId, Name = "Original Name" };
         var updatedActivity = new Activity { Id = activityId, Name = "Updated Name" };
+        var existingActivity = new Activity { Id = activityId, Name = "Updated Name" };
 
-        var mockDbSet = CreateMockDbSet(new List<Activity> { existingActivity });
-        _mockContext.Activity.Returns(mockDbSet);
-        _mockContext.SaveChangesAsync().Returns(1);
+        _mockActivitiesService.UpdateActivityAsync(activityId, updatedActivity).Returns(existingActivity);
 
         // Act
         var result = await _controller.UpdateActivity(activityId, updatedActivity);
 
         // Assert
-        Assert.That(result, Is.InstanceOf<OkObjectResult>());
-        var okResult = (OkObjectResult)result;
-        Assert.That(okResult.Value, Is.InstanceOf<Activity>());
-        var returnedActivity = (Activity)okResult.Value;
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(200));
+        Assert.That(objectResult.Value, Is.InstanceOf<Activity>());
+        var returnedActivity = (Activity)objectResult.Value;
         Assert.That(returnedActivity.Name, Is.EqualTo("Updated Name"));
     }
 
@@ -143,14 +143,15 @@ public class ActivitiesControllerTests
         var activityId = Guid.NewGuid();
         var updatedActivity = new Activity { Id = activityId, Name = "Updated Name" };
 
-        var mockDbSet = CreateMockDbSet(new List<Activity>());
-        _mockContext.Activity.Returns(mockDbSet);
+        _mockActivitiesService.UpdateActivityAsync(activityId, updatedActivity).Returns((Activity?)null);
 
         // Act
         var result = await _controller.UpdateActivity(activityId, updatedActivity);
 
         // Assert
-        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(404));
     }
 
     [Test]
@@ -158,11 +159,7 @@ public class ActivitiesControllerTests
     {
         // Arrange
         var activityId = Guid.NewGuid();
-        var activity = new Activity { Id = activityId, Name = "Test Activity" };
-
-        var mockDbSet = CreateMockDbSet(new List<Activity> { activity });
-        _mockContext.Activity.Returns(mockDbSet);
-        _mockContext.SaveChangesAsync().Returns(1);
+        _mockActivitiesService.DeleteActivityAsync(activityId).Returns(true);
 
         // Act
         var result = await _controller.DeleteActivity(activityId);
@@ -176,26 +173,15 @@ public class ActivitiesControllerTests
     {
         // Arrange
         var activityId = Guid.NewGuid();
-        var mockDbSet = CreateMockDbSet(new List<Activity>());
-        _mockContext.Activity.Returns(mockDbSet);
+        _mockActivitiesService.DeleteActivityAsync(activityId).Returns(false);
 
         // Act
         var result = await _controller.DeleteActivity(activityId);
 
         // Assert
-        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(404));
     }
 
-    private DbSet<Activity> CreateMockDbSet(List<Activity> activities)
-    {
-        var queryable = activities.AsQueryable();
-        var mockDbSet = Substitute.For<DbSet<Activity>, IQueryable<Activity>>();
-        
-        ((IQueryable<Activity>)mockDbSet).Provider.Returns(queryable.Provider);
-        ((IQueryable<Activity>)mockDbSet).Expression.Returns(queryable.Expression);
-        ((IQueryable<Activity>)mockDbSet).ElementType.Returns(queryable.ElementType);
-        ((IQueryable<Activity>)mockDbSet).GetEnumerator().Returns(queryable.GetEnumerator());
-        
-        return mockDbSet;
-    }
 }

@@ -101,6 +101,11 @@ builder.Services.AddDbContext<IDatabaseContext, DatabaseContext>(databaseSetup);
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 builder.Services.AddScoped<IScoringService, ScoringService>();
 builder.Services.AddScoped<IScoreCalculationService, ScoreCalculationService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IActivitiesService, ActivitiesService>();
+builder.Services.AddScoped<IGroupsService, GroupsService>();
+builder.Services.AddScoped<IPoolsService, PoolsService>();
+builder.Services.AddScoped<IReferentsService, ReferentsService>();
 
 var logger = builder.Services.BuildServiceProvider().GetRequiredService<ILogger<Program>>();
 

@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Kont.backend.DAL.DatabaseContext;
 using Kont.backend.DAL;
-using Microsoft.EntityFrameworkCore;
 using Kont.backend.Models.Scoring;
+using Kont.backend.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace Kont.backend.Controllers;
 
@@ -10,14 +11,14 @@ namespace Kont.backend.Controllers;
 [ApiController]
 public class ActivitiesController : ControllerBase
 {
-    private readonly IDatabaseContext _context;
+    private readonly IActivitiesService _activitiesService;
     private readonly ILogger<ActivitiesController> _logger;
 
     public ActivitiesController(
-        IDatabaseContext context,
+        IActivitiesService activitiesService,
         ILogger<ActivitiesController> logger)
     {
-        _context = context;
+        _activitiesService = activitiesService;
         _logger = logger;
     }
 
@@ -34,13 +35,9 @@ public class ActivitiesController : ControllerBase
     {
         try
         {
-            var activities = await _context.Activity
-                .Include(a => a.Site)
-                .Include(a => a.ScoringMetrics)
-                .Include(a => a.CreatedBy)
-                .ToListAsync();
+            var activities = await _activitiesService.GetActivitiesAsync();
 
-            _logger.LogInformation("Retrieved {Count} activities", activities.Count);
+            _logger.LogInformation("Retrieved {Count} activities", activities.Count());
             return Ok(activities);
         }
         catch (Exception ex)
@@ -66,11 +63,7 @@ public class ActivitiesController : ControllerBase
     {
         try
         {
-            var activity = await _context.Activity
-                .Include(a => a.Site)
-                .Include(a => a.ScoringMetrics)
-                .Include(a => a.CreatedBy)
-                .FirstOrDefaultAsync(a => a.Id == id);
+            var activity = await _activitiesService.GetActivityByIdAsync(id);
 
             if (activity == null)
             {
@@ -108,15 +101,11 @@ public class ActivitiesController : ControllerBase
                 return BadRequest(ModelState);
             }
 
-            activity.Id = Guid.NewGuid();
-            activity.CreatedAt = DateTime.UtcNow;
+            var createdActivity = await _activitiesService.CreateActivityAsync(activity);
 
-            _context.Activity.Add(activity);
-            await _context.SaveChangesAsync();
+            _logger.LogInformation("Created activity {Id} with name {Name}", createdActivity.Id, createdActivity.Name);
 
-            _logger.LogInformation("Created activity {Id} with name {Name}", activity.Id, activity.Name);
-
-            return CreatedAtAction(nameof(GetActivity), new { id = activity.Id }, activity);
+            return CreatedAtAction(nameof(GetActivity), new { id = createdActivity.Id }, createdActivity);
         }
         catch (Exception ex)
         {
@@ -154,22 +143,15 @@ public class ActivitiesController : ControllerBase
                 return BadRequest(ModelState);
             }
 
-            var existingActivity = await _context.Activity.FindAsync(id);
-            if (existingActivity == null)
+            var updatedActivity = await _activitiesService.UpdateActivityAsync(id, activity);
+            if (updatedActivity == null)
             {
                 _logger.LogWarning("Activity with ID {Id} not found for update", id);
                 return NotFound(new { message = "Activity not found" });
             }
 
-            existingActivity.Name = activity.Name;
-            existingActivity.Description = activity.Description;
-            existingActivity.Site = activity.Site;
-            existingActivity.ScoringMetrics = activity.ScoringMetrics;
-
-            await _context.SaveChangesAsync();
-
             _logger.LogInformation("Updated activity {Id}", id);
-            return Ok(existingActivity);
+            return Ok(updatedActivity);
         }
         catch (Exception ex)
         {
@@ -194,15 +176,12 @@ public class ActivitiesController : ControllerBase
     {
         try
         {
-            var activity = await _context.Activity.FindAsync(id);
-            if (activity == null)
+            var deleted = await _activitiesService.DeleteActivityAsync(id);
+            if (!deleted)
             {
                 _logger.LogWarning("Activity with ID {Id} not found for deletion", id);
                 return NotFound(new { message = "Activity not found" });
             }
-
-            _context.Activity.Remove(activity);
-            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Deleted activity {Id}", id);
             return NoContent();
@@ -231,10 +210,7 @@ public class ActivitiesController : ControllerBase
     {
         try
         {
-            var summary = await _context.ActivitySummaryData
-                .Include(a => a.ActivityEntity)
-                .Include(a => a.PoolEntity)
-                .FirstOrDefaultAsync(a => a.PoolEntity.Id == poolId && a.ActivityEntity.Id == activityId);
+            var summary = await _activitiesService.GetActivitySummaryAsync(poolId, activityId);
 
             if (summary == null)
             {
