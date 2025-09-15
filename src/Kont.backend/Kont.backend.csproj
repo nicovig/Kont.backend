@@ -7,18 +7,22 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Examples\**" />
     <Compile Remove="Models\Document\**" />
     <Compile Remove="Models\Search\**" />
     <Compile Remove="Tools\S3\**" />
     <Compile Remove="Tools\Searchers\**" />
+    <Content Remove="Examples\**" />
     <Content Remove="Models\Document\**" />
     <Content Remove="Models\Search\**" />
     <Content Remove="Tools\S3\**" />
     <Content Remove="Tools\Searchers\**" />
+    <EmbeddedResource Remove="Examples\**" />
     <EmbeddedResource Remove="Models\Document\**" />
     <EmbeddedResource Remove="Models\Search\**" />
     <EmbeddedResource Remove="Tools\S3\**" />
     <EmbeddedResource Remove="Tools\Searchers\**" />
+    <None Remove="Examples\**" />
     <None Remove="Models\Document\**" />
     <None Remove="Models\Search\**" />
     <None Remove="Tools\S3\**" />
@@ -42,10 +46,6 @@
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.2.1" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Examples\" />
   </ItemGroup>
 
 </Project>

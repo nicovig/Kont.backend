@@ -19,6 +19,8 @@ public class Administrator : User
 
     [Required]
     public required Role Role { get; set; }
+
+    public required bool IsActive { get; set; }
 }
 
 
