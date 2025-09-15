@@ -1,28 +1,29 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
 using Kont.backend.Controllers;
 using Kont.backend.DAL;
 using Kont.backend.DAL.DatabaseContext;
-using Xunit;
 
 namespace Kont.backend.tests.Controllers;
 
-public class DashboardControllerTests : IDisposable
+[TestFixture]
+public class DashboardControllerTests
 {
-    private readonly Mock<IDatabaseContext> _mockContext;
-    private readonly Mock<ILogger<DashboardController>> _mockLogger;
-    private readonly DashboardController _controller;
+    private IDatabaseContext _mockContext;
+    private ILogger<DashboardController> _mockLogger;
+    private DashboardController _controller;
 
-    public DashboardControllerTests()
+    [SetUp]
+    public void Setup()
     {
-        _mockContext = new Mock<IDatabaseContext>();
-        _mockLogger = new Mock<ILogger<DashboardController>>();
-        _controller = new DashboardController(_mockContext.Object, _mockLogger.Object);
+        _mockContext = Substitute.For<IDatabaseContext>();
+        _mockLogger = Substitute.For<ILogger<DashboardController>>();
+        _controller = new DashboardController(_mockContext, _mockLogger);
     }
 
-    [Fact]
+    [Test]
     public async Task GetDashboardStats_ReturnsOkResult_WithStats()
     {
         // Arrange
@@ -48,23 +49,25 @@ public class DashboardControllerTests : IDisposable
         var mockPlayerRegistrationDbSet = CreateMockDbSet(playerRegistrations);
         var mockActivityDbSet = CreateMockDbSet(activities);
 
-        _mockContext.Setup(c => c.Pool).Returns(mockPoolDbSet.Object);
-        _mockContext.Setup(c => c.PlayerRegistration).Returns(mockPlayerRegistrationDbSet.Object);
-        _mockContext.Setup(c => c.Activity).Returns(mockActivityDbSet.Object);
+        _mockContext.Pool.Returns(mockPoolDbSet);
+        _mockContext.PlayerRegistration.Returns(mockPlayerRegistrationDbSet);
+        _mockContext.Activity.Returns(mockActivityDbSet);
 
         // Act
         var result = await _controller.GetDashboardStats();
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var stats = Assert.IsType<DashboardStats>(okResult.Value);
-        Assert.Equal(2, stats.TotalPools);
-        Assert.Equal(1, stats.ActivePools);
-        Assert.Equal(2, stats.TotalPlayers);
-        Assert.Equal(2, stats.TotalActivities);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        Assert.That(okResult.Value, Is.InstanceOf<DashboardStats>());
+        var stats = (DashboardStats)okResult.Value;
+        Assert.That(stats.TotalPools, Is.EqualTo(2));
+        Assert.That(stats.ActivePools, Is.EqualTo(1));
+        Assert.That(stats.TotalPlayers, Is.EqualTo(2));
+        Assert.That(stats.TotalActivities, Is.EqualTo(2));
     }
 
-    [Fact]
+    [Test]
     public async Task GetRealTimeUpdates_ReturnsOkResult_WithActivity()
     {
         // Arrange
@@ -79,18 +82,20 @@ public class DashboardControllerTests : IDisposable
         };
 
         var mockPoolDbSet = CreateMockDbSet(pools);
-        _mockContext.Setup(c => c.Pool).Returns(mockPoolDbSet.Object);
+        _mockContext.Pool.Returns(mockPoolDbSet);
 
         // Act
         var result = await _controller.GetRealTimeUpdates();
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var activity = Assert.IsType<RecentActivity>(okResult.Value);
-        Assert.NotNull(activity);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        Assert.That(okResult.Value, Is.InstanceOf<RecentActivity>());
+        var activity = (RecentActivity)okResult.Value;
+        Assert.That(activity, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task GetRealTimeUpdates_WithNoActivity_ReturnsDefaultActivity()
     {
         // Arrange
@@ -98,35 +103,32 @@ public class DashboardControllerTests : IDisposable
         var mockPlayerRegistrationDbSet = CreateMockDbSet(new List<PlayerRegistration>());
         var mockGameSessionDbSet = CreateMockDbSet(new List<GameSession>());
 
-        _mockContext.Setup(c => c.Pool).Returns(mockPoolDbSet.Object);
-        _mockContext.Setup(c => c.PlayerRegistration).Returns(mockPlayerRegistrationDbSet.Object);
-        _mockContext.Setup(c => c.GameSession).Returns(mockGameSessionDbSet.Object);
+        _mockContext.Pool.Returns(mockPoolDbSet);
+        _mockContext.PlayerRegistration.Returns(mockPlayerRegistrationDbSet);
+        _mockContext.GameSession.Returns(mockGameSessionDbSet);
 
         // Act
         var result = await _controller.GetRealTimeUpdates();
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var activity = Assert.IsType<RecentActivity>(okResult.Value);
-        Assert.Equal("no_activity", activity.Type);
-        Assert.Equal("Aucune activité récente", activity.Message);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        Assert.That(okResult.Value, Is.InstanceOf<RecentActivity>());
+        var activity = (RecentActivity)okResult.Value;
+        Assert.That(activity.Type, Is.EqualTo("no_activity"));
+        Assert.That(activity.Message, Is.EqualTo("Aucune activité récente"));
     }
 
-    private Mock<DbSet<T>> CreateMockDbSet<T>(List<T> data) where T : class
+    private DbSet<T> CreateMockDbSet<T>(List<T> data) where T : class
     {
         var queryable = data.AsQueryable();
-        var mockDbSet = new Mock<DbSet<T>>();
+        var mockDbSet = Substitute.For<DbSet<T>, IQueryable<T>>();
         
-        mockDbSet.As<IQueryable<T>>().Setup(m => m.Provider).Returns(queryable.Provider);
-        mockDbSet.As<IQueryable<T>>().Setup(m => m.Expression).Returns(queryable.Expression);
-        mockDbSet.As<IQueryable<T>>().Setup(m => m.ElementType).Returns(queryable.ElementType);
-        mockDbSet.As<IQueryable<T>>().Setup(m => m.GetEnumerator()).Returns(queryable.GetEnumerator());
+        ((IQueryable<T>)mockDbSet).Provider.Returns(queryable.Provider);
+        ((IQueryable<T>)mockDbSet).Expression.Returns(queryable.Expression);
+        ((IQueryable<T>)mockDbSet).ElementType.Returns(queryable.ElementType);
+        ((IQueryable<T>)mockDbSet).GetEnumerator().Returns(queryable.GetEnumerator());
         
         return mockDbSet;
-    }
-
-    public void Dispose()
-    {
-        _controller?.Dispose();
     }
 }

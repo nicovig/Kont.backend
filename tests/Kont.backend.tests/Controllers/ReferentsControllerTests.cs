@@ -1,28 +1,29 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
 using Kont.backend.Controllers;
 using Kont.backend.DAL;
 using Kont.backend.DAL.DatabaseContext;
-using Xunit;
 
 namespace Kont.backend.tests.Controllers;
 
-public class ReferentsControllerTests : IDisposable
+[TestFixture]
+public class ReferentsControllerTests
 {
-    private readonly Mock<IDatabaseContext> _mockContext;
-    private readonly Mock<ILogger<ReferentsController>> _mockLogger;
-    private readonly ReferentsController _controller;
+    private IDatabaseContext _mockContext;
+    private ILogger<ReferentsController> _mockLogger;
+    private ReferentsController _controller;
 
-    public ReferentsControllerTests()
+    [SetUp]
+    public void Setup()
     {
-        _mockContext = new Mock<IDatabaseContext>();
-        _mockLogger = new Mock<ILogger<ReferentsController>>();
-        _controller = new ReferentsController(_mockContext.Object, _mockLogger.Object);
+        _mockContext = Substitute.For<IDatabaseContext>();
+        _mockLogger = Substitute.For<ILogger<ReferentsController>>();
+        _controller = new ReferentsController(_mockContext, _mockLogger);
     }
 
-    [Fact]
+    [Test]
     public async Task AssignReferent_WithValidData_ReturnsOkResult()
     {
         // Arrange
@@ -36,22 +37,23 @@ public class ReferentsControllerTests : IDisposable
         var mockPoolDbSet = CreateMockDbSet(new List<Pool> { pool });
         var mockPlayerDbSet = CreateMockDbSet(new List<Player> { referent });
         var mockPlayerRegistrationDbSet = CreateMockDbSet(new List<PlayerRegistration>());
-        var mockPlayerRegistrationDbSetForAdd = new Mock<DbSet<PlayerRegistration>>();
+        var mockPlayerRegistrationDbSetForAdd = Substitute.For<DbSet<PlayerRegistration>>();
 
-        _mockContext.Setup(c => c.Pool).Returns(mockPoolDbSet.Object);
-        _mockContext.Setup(c => c.Player).Returns(mockPlayerDbSet.Object);
-        _mockContext.Setup(c => c.PlayerRegistration).Returns(mockPlayerRegistrationDbSet.Object);
-        _mockContext.Setup(c => c.SaveChangesAsync()).ReturnsAsync(1);
+        _mockContext.Pool.Returns(mockPoolDbSet);
+        _mockContext.Player.Returns(mockPlayerDbSet);
+        _mockContext.PlayerRegistration.Returns(mockPlayerRegistrationDbSet);
+        _mockContext.SaveChangesAsync().Returns(1);
 
         // Act
         var result = await _controller.AssignReferent(poolId, request);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        Assert.NotNull(okResult.Value);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        Assert.That(okResult.Value, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task AssignReferent_WithInvalidPool_ReturnsNotFound()
     {
         // Arrange
@@ -60,16 +62,16 @@ public class ReferentsControllerTests : IDisposable
         var request = new AssignReferentRequest { ReferentId = referentId.ToString() };
 
         var mockPoolDbSet = CreateMockDbSet(new List<Pool>());
-        _mockContext.Setup(c => c.Pool).Returns(mockPoolDbSet.Object);
+        _mockContext.Pool.Returns(mockPoolDbSet);
 
         // Act
         var result = await _controller.AssignReferent(poolId, request);
 
         // Assert
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
     }
 
-    [Fact]
+    [Test]
     public async Task AssignReferent_WithInvalidReferent_ReturnsNotFound()
     {
         // Arrange
@@ -81,17 +83,17 @@ public class ReferentsControllerTests : IDisposable
         var mockPoolDbSet = CreateMockDbSet(new List<Pool> { pool });
         var mockPlayerDbSet = CreateMockDbSet(new List<Player>());
 
-        _mockContext.Setup(c => c.Pool).Returns(mockPoolDbSet.Object);
-        _mockContext.Setup(c => c.Player).Returns(mockPlayerDbSet.Object);
+        _mockContext.Pool.Returns(mockPoolDbSet);
+        _mockContext.Player.Returns(mockPlayerDbSet);
 
         // Act
         var result = await _controller.AssignReferent(poolId, request);
 
         // Assert
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
     }
 
-    [Fact]
+    [Test]
     public async Task RemoveReferent_WithValidData_ReturnsOkResult()
     {
         // Arrange
@@ -109,19 +111,20 @@ public class ReferentsControllerTests : IDisposable
         var mockPoolDbSet = CreateMockDbSet(new List<Pool> { pool });
         var mockPlayerRegistrationDbSet = CreateMockDbSet(new List<PlayerRegistration> { referentRegistration });
 
-        _mockContext.Setup(c => c.Pool).Returns(mockPoolDbSet.Object);
-        _mockContext.Setup(c => c.PlayerRegistration).Returns(mockPlayerRegistrationDbSet.Object);
-        _mockContext.Setup(c => c.SaveChangesAsync()).ReturnsAsync(1);
+        _mockContext.Pool.Returns(mockPoolDbSet);
+        _mockContext.PlayerRegistration.Returns(mockPlayerRegistrationDbSet);
+        _mockContext.SaveChangesAsync().Returns(1);
 
         // Act
         var result = await _controller.RemoveReferent(poolId, referentId);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        Assert.NotNull(okResult.Value);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        Assert.That(okResult.Value, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task GetPoolReferents_WithValidPool_ReturnsOkResult()
     {
         // Arrange
@@ -138,19 +141,21 @@ public class ReferentsControllerTests : IDisposable
         var mockPoolDbSet = CreateMockDbSet(new List<Pool> { pool });
         var mockPlayerRegistrationDbSet = CreateMockDbSet(new List<PlayerRegistration> { referentRegistration });
 
-        _mockContext.Setup(c => c.Pool).Returns(mockPoolDbSet.Object);
-        _mockContext.Setup(c => c.PlayerRegistration).Returns(mockPlayerRegistrationDbSet.Object);
+        _mockContext.Pool.Returns(mockPoolDbSet);
+        _mockContext.PlayerRegistration.Returns(mockPlayerRegistrationDbSet);
 
         // Act
         var result = await _controller.GetPoolReferents(poolId);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var returnedReferents = Assert.IsAssignableFrom<IEnumerable<Player>>(okResult.Value);
-        Assert.Single(returnedReferents);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        Assert.That(okResult.Value, Is.AssignableFrom<IEnumerable<Player>>());
+        var returnedReferents = (IEnumerable<Player>)okResult.Value;
+        Assert.That(returnedReferents.Count(), Is.EqualTo(1));
     }
 
-    [Fact]
+    [Test]
     public async Task GenerateRecoveryQR_WithValidData_ReturnsOkResult()
     {
         // Arrange
@@ -162,18 +167,19 @@ public class ReferentsControllerTests : IDisposable
         var mockPoolDbSet = CreateMockDbSet(new List<Pool> { pool });
         var mockPlayerDbSet = CreateMockDbSet(new List<Player> { player });
 
-        _mockContext.Setup(c => c.Pool).Returns(mockPoolDbSet.Object);
-        _mockContext.Setup(c => c.Player).Returns(mockPlayerDbSet.Object);
+        _mockContext.Pool.Returns(mockPoolDbSet);
+        _mockContext.Player.Returns(mockPlayerDbSet);
 
         // Act
         var result = await _controller.GenerateRecoveryQR(poolId, playerId);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        Assert.NotNull(okResult.Value);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        Assert.That(okResult.Value, Is.Not.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task GenerateRecoveryQR_WithInvalidPool_ReturnsNotFound()
     {
         // Arrange
@@ -181,30 +187,25 @@ public class ReferentsControllerTests : IDisposable
         var playerId = Guid.NewGuid();
 
         var mockPoolDbSet = CreateMockDbSet(new List<Pool>());
-        _mockContext.Setup(c => c.Pool).Returns(mockPoolDbSet.Object);
+        _mockContext.Pool.Returns(mockPoolDbSet);
 
         // Act
         var result = await _controller.GenerateRecoveryQR(poolId, playerId);
 
         // Assert
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
     }
 
-    private Mock<DbSet<T>> CreateMockDbSet<T>(List<T> data) where T : class
+    private DbSet<T> CreateMockDbSet<T>(List<T> data) where T : class
     {
         var queryable = data.AsQueryable();
-        var mockDbSet = new Mock<DbSet<T>>();
+        var mockDbSet = Substitute.For<DbSet<T>, IQueryable<T>>();
         
-        mockDbSet.As<IQueryable<T>>().Setup(m => m.Provider).Returns(queryable.Provider);
-        mockDbSet.As<IQueryable<T>>().Setup(m => m.Expression).Returns(queryable.Expression);
-        mockDbSet.As<IQueryable<T>>().Setup(m => m.ElementType).Returns(queryable.ElementType);
-        mockDbSet.As<IQueryable<T>>().Setup(m => m.GetEnumerator()).Returns(queryable.GetEnumerator());
+        ((IQueryable<T>)mockDbSet).Provider.Returns(queryable.Provider);
+        ((IQueryable<T>)mockDbSet).Expression.Returns(queryable.Expression);
+        ((IQueryable<T>)mockDbSet).ElementType.Returns(queryable.ElementType);
+        ((IQueryable<T>)mockDbSet).GetEnumerator().Returns(queryable.GetEnumerator());
         
         return mockDbSet;
-    }
-
-    public void Dispose()
-    {
-        _controller?.Dispose();
     }
 }

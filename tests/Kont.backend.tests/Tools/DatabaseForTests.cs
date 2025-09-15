@@ -28,6 +28,7 @@ public class DatabaseForTests
                                     {
                                         Id = e.Id,
                                         Email = e.Email,
+                                        IsActive = true,
                                         Role = new Role { Id = new Guid(), CreatedAt = new DateTime(), RoleType = RoleType.Admin },
                                         Subscription = new Subscription { Id = new Guid(), ExpiresAt = new DateTime().AddDays(365), PaidAt = new DateTime(), SubscriptionType = SubscriptionType.Klasel }
                                     } ));

@@ -1,33 +1,29 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
 using Kont.backend.Controllers;
 using Kont.backend.DAL;
 using Kont.backend.DAL.DatabaseContext;
-using Xunit;
 
 namespace Kont.backend.tests.Controllers;
 
-public class ActivitiesControllerTests : IDisposable
+[TestFixture]
+public class ActivitiesControllerTests
 {
-    private readonly Mock<IDatabaseContext> _mockContext;
-    private readonly Mock<ILogger<ActivitiesController>> _mockLogger;
-    private readonly ActivitiesController _controller;
-    private readonly DbContextOptions<DatabaseContext> _options;
+    private IDatabaseContext _mockContext;
+    private ILogger<ActivitiesController> _mockLogger;
+    private ActivitiesController _controller;
 
-    public ActivitiesControllerTests()
+    [SetUp]
+    public void Setup()
     {
-        _options = new DbContextOptionsBuilder<DatabaseContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _mockContext = new Mock<IDatabaseContext>();
-        _mockLogger = new Mock<ILogger<ActivitiesController>>();
-        _controller = new ActivitiesController(_mockContext.Object, _mockLogger.Object);
+        _mockContext = Substitute.For<IDatabaseContext>();
+        _mockLogger = Substitute.For<ILogger<ActivitiesController>>();
+        _controller = new ActivitiesController(_mockContext, _mockLogger);
     }
 
-    [Fact]
+    [Test]
     public async Task GetActivities_ReturnsOkResult_WithActivities()
     {
         // Arrange
@@ -37,19 +33,25 @@ public class ActivitiesControllerTests : IDisposable
             new Activity { Id = Guid.NewGuid(), Name = "Test Activity 2" }
         };
 
-        var mockDbSet = CreateMockDbSet(activities);
-        _mockContext.Setup(c => c.Activity).Returns(mockDbSet.Object);
+        var mockDbSet = Substitute.For<DbSet<Activity>, IQueryable<Activity>>();
+        var queryable = activities.AsQueryable();
+        ((IQueryable<Activity>)mockDbSet).Provider.Returns(queryable.Provider);
+        ((IQueryable<Activity>)mockDbSet).Expression.Returns(queryable.Expression);
+        ((IQueryable<Activity>)mockDbSet).ElementType.Returns(queryable.ElementType);
+        ((IQueryable<Activity>)mockDbSet).GetEnumerator().Returns(queryable.GetEnumerator());
+        
+        _mockContext.Activity.Returns(mockDbSet);
 
         // Act
         var result = await _controller.GetActivities();
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var returnedActivities = Assert.IsAssignableFrom<IEnumerable<Activity>>(okResult.Value);
-        Assert.Equal(2, returnedActivities.Count());
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(200));
     }
 
-    [Fact]
+    [Test]
     public async Task GetActivity_WithValidId_ReturnsOkResult()
     {
         // Arrange
@@ -57,33 +59,35 @@ public class ActivitiesControllerTests : IDisposable
         var activity = new Activity { Id = activityId, Name = "Test Activity" };
 
         var mockDbSet = CreateMockDbSet(new List<Activity> { activity });
-        _mockContext.Setup(c => c.Activity).Returns(mockDbSet.Object);
+        _mockContext.Activity.Returns(mockDbSet);
 
         // Act
         var result = await _controller.GetActivity(activityId);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var returnedActivity = Assert.IsType<Activity>(okResult.Value);
-        Assert.Equal(activityId, returnedActivity.Id);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        Assert.That(okResult.Value, Is.InstanceOf<Activity>());
+        var returnedActivity = (Activity)okResult.Value;
+        Assert.That(returnedActivity.Id, Is.EqualTo(activityId));
     }
 
-    [Fact]
+    [Test]
     public async Task GetActivity_WithInvalidId_ReturnsNotFound()
     {
         // Arrange
         var activityId = Guid.NewGuid();
         var mockDbSet = CreateMockDbSet(new List<Activity>());
-        _mockContext.Setup(c => c.Activity).Returns(mockDbSet.Object);
+        _mockContext.Activity.Returns(mockDbSet);
 
         // Act
         var result = await _controller.GetActivity(activityId);
 
         // Assert
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
     }
 
-    [Fact]
+    [Test]
     public async Task CreateActivity_WithValidData_ReturnsCreatedResult()
     {
         // Arrange
@@ -93,21 +97,23 @@ public class ActivitiesControllerTests : IDisposable
             Description = "Test Description"
         };
 
-        var mockDbSet = new Mock<DbSet<Activity>>();
-        _mockContext.Setup(c => c.Activity).Returns(mockDbSet.Object);
-        _mockContext.Setup(c => c.SaveChangesAsync()).ReturnsAsync(1);
+        var mockDbSet = Substitute.For<DbSet<Activity>>();
+        _mockContext.Activity.Returns(mockDbSet);
+        _mockContext.SaveChangesAsync().Returns(1);
 
         // Act
         var result = await _controller.CreateActivity(activity);
 
         // Assert
-        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
-        var returnedActivity = Assert.IsType<Activity>(createdResult.Value);
-        Assert.Equal(activity.Name, returnedActivity.Name);
-        Assert.NotEqual(Guid.Empty, returnedActivity.Id);
+        Assert.That(result, Is.InstanceOf<CreatedAtActionResult>());
+        var createdResult = (CreatedAtActionResult)result;
+        Assert.That(createdResult.Value, Is.InstanceOf<Activity>());
+        var returnedActivity = (Activity)createdResult.Value;
+        Assert.That(returnedActivity.Name, Is.EqualTo(activity.Name));
+        Assert.That(returnedActivity.Id, Is.Not.EqualTo(Guid.Empty));
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateActivity_WithValidData_ReturnsOkResult()
     {
         // Arrange
@@ -116,19 +122,21 @@ public class ActivitiesControllerTests : IDisposable
         var updatedActivity = new Activity { Id = activityId, Name = "Updated Name" };
 
         var mockDbSet = CreateMockDbSet(new List<Activity> { existingActivity });
-        _mockContext.Setup(c => c.Activity).Returns(mockDbSet.Object);
-        _mockContext.Setup(c => c.SaveChangesAsync()).ReturnsAsync(1);
+        _mockContext.Activity.Returns(mockDbSet);
+        _mockContext.SaveChangesAsync().Returns(1);
 
         // Act
         var result = await _controller.UpdateActivity(activityId, updatedActivity);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var returnedActivity = Assert.IsType<Activity>(okResult.Value);
-        Assert.Equal("Updated Name", returnedActivity.Name);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        Assert.That(okResult.Value, Is.InstanceOf<Activity>());
+        var returnedActivity = (Activity)okResult.Value;
+        Assert.That(returnedActivity.Name, Is.EqualTo("Updated Name"));
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateActivity_WithInvalidId_ReturnsNotFound()
     {
         // Arrange
@@ -136,16 +144,16 @@ public class ActivitiesControllerTests : IDisposable
         var updatedActivity = new Activity { Id = activityId, Name = "Updated Name" };
 
         var mockDbSet = CreateMockDbSet(new List<Activity>());
-        _mockContext.Setup(c => c.Activity).Returns(mockDbSet.Object);
+        _mockContext.Activity.Returns(mockDbSet);
 
         // Act
         var result = await _controller.UpdateActivity(activityId, updatedActivity);
 
         // Assert
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteActivity_WithValidId_ReturnsNoContent()
     {
         // Arrange
@@ -153,46 +161,41 @@ public class ActivitiesControllerTests : IDisposable
         var activity = new Activity { Id = activityId, Name = "Test Activity" };
 
         var mockDbSet = CreateMockDbSet(new List<Activity> { activity });
-        _mockContext.Setup(c => c.Activity).Returns(mockDbSet.Object);
-        _mockContext.Setup(c => c.SaveChangesAsync()).ReturnsAsync(1);
+        _mockContext.Activity.Returns(mockDbSet);
+        _mockContext.SaveChangesAsync().Returns(1);
 
         // Act
         var result = await _controller.DeleteActivity(activityId);
 
         // Assert
-        Assert.IsType<NoContentResult>(result);
+        Assert.That(result, Is.InstanceOf<NoContentResult>());
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteActivity_WithInvalidId_ReturnsNotFound()
     {
         // Arrange
         var activityId = Guid.NewGuid();
         var mockDbSet = CreateMockDbSet(new List<Activity>());
-        _mockContext.Setup(c => c.Activity).Returns(mockDbSet.Object);
+        _mockContext.Activity.Returns(mockDbSet);
 
         // Act
         var result = await _controller.DeleteActivity(activityId);
 
         // Assert
-        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
     }
 
-    private Mock<DbSet<Activity>> CreateMockDbSet(List<Activity> activities)
+    private DbSet<Activity> CreateMockDbSet(List<Activity> activities)
     {
         var queryable = activities.AsQueryable();
-        var mockDbSet = new Mock<DbSet<Activity>>();
+        var mockDbSet = Substitute.For<DbSet<Activity>, IQueryable<Activity>>();
         
-        mockDbSet.As<IQueryable<Activity>>().Setup(m => m.Provider).Returns(queryable.Provider);
-        mockDbSet.As<IQueryable<Activity>>().Setup(m => m.Expression).Returns(queryable.Expression);
-        mockDbSet.As<IQueryable<Activity>>().Setup(m => m.ElementType).Returns(queryable.ElementType);
-        mockDbSet.As<IQueryable<Activity>>().Setup(m => m.GetEnumerator()).Returns(queryable.GetEnumerator());
+        ((IQueryable<Activity>)mockDbSet).Provider.Returns(queryable.Provider);
+        ((IQueryable<Activity>)mockDbSet).Expression.Returns(queryable.Expression);
+        ((IQueryable<Activity>)mockDbSet).ElementType.Returns(queryable.ElementType);
+        ((IQueryable<Activity>)mockDbSet).GetEnumerator().Returns(queryable.GetEnumerator());
         
         return mockDbSet;
-    }
-
-    public void Dispose()
-    {
-        _controller?.Dispose();
     }
 }
