@@ -15,6 +15,8 @@ public class Subscription
     public DateTime PaidAt { get; set; } = DateTime.UtcNow;
 
     public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddDays(30);
+
+    public Administrator Administrator { get; set; }
 }
 
 public enum SubscriptionType

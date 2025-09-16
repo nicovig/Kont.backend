@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Kont.backend.DAL.DatabaseContext;
 using Kont.backend.DAL;
 using Kont.backend.Services;
-using Microsoft.EntityFrameworkCore;
 
 namespace Kont.backend.Controllers;
 
