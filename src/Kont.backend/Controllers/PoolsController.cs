@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Kont.backend.Controllers;
 
-[Route("api/admin/[controller]")]
+[Route("admin/[controller]")]
 [ApiController]
 public class PoolsController : ControllerBase
 {

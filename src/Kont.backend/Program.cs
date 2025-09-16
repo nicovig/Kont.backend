@@ -106,6 +106,8 @@ builder.Services.AddScoped<IActivitiesService, ActivitiesService>();
 builder.Services.AddScoped<IGroupsService, GroupsService>();
 builder.Services.AddScoped<IPoolsService, PoolsService>();
 builder.Services.AddScoped<IReferentsService, ReferentsService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ISitesService, SitesService>();
 
 var logger = builder.Services.BuildServiceProvider().GetRequiredService<ILogger<Program>>();
 

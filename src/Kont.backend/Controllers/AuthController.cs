@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Kont.backend.DAL.DatabaseContext;
 using Kont.backend.Models.User;
 using Kont.backend.Services;
-using Microsoft.EntityFrameworkCore;
 using Kont.backend.DAL;
 
 namespace Kont.backend.Controllers;
@@ -11,17 +9,14 @@ namespace Kont.backend.Controllers;
 [ApiController]
 public class AuthController : ControllerBase
 {
-    private readonly IDatabaseContext _context;
-    private readonly IPasswordService _passwordService;
+    private readonly IAuthService _authService;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
-        IDatabaseContext context,
-        IPasswordService passwordService,
+        IAuthService authService,
         ILogger<AuthController> logger)
     {
-        _context = context;
-        _passwordService = passwordService;
+        _authService = authService;
         _logger = logger;
     }
 
@@ -41,32 +36,13 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var administrator = await _context.Administrator.Include(a => a.Role)
-                                                            .Include(a => a.Subscription)
-                                                            .Include(a => a.Manager)
-                                                            .Include(a => a.Sites)
-                                                            .FirstOrDefaultAsync(a => a.Email == request.Email);
-            if (administrator == null)
-            {
-                _logger.LogWarning("Login attempt with non-existent email: {Email}", request.Email);
-                return Unauthorized(new { message = "Invalid credentials" });
-            }
-
-
-            if (!_passwordService.VerifyPassword(request.Password, administrator.Password))
-            {
-                _logger.LogWarning("Login attempt with invalid password for user: {Email}", request.Email);
-                return Unauthorized(new { message = "Invalid credentials" });
-            }
-
-            _logger.LogInformation("User logged in successfully: {Username}", administrator.Email);
-
+            var administrator = await _authService.LoginAsync(request.Email, request.Password, RoleType.Admin);
             return Ok(administrator);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during login for {Email}", request.Email);
-            return StatusCode(500, new { message = "Internal server error" });
+            return Unauthorized(new { message = "Invalid credentials" });
         }
     }
 }
