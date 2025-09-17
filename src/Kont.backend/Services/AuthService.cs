@@ -7,23 +7,25 @@ namespace Kont.backend.Services;
 
 public interface IAuthService
 {
-    Task<Administrator> LoginAsync(string email, string password, RoleType? requiredRole = null);
+    Task<JwtResponse> LoginAsync(string email, string password, RoleType? requiredRole = null);
 }
 
 public class AuthService : IAuthService
 {
     private readonly IDatabaseContext _context;
     private readonly IPasswordService _passwordService;
+    private readonly IJwtService _jwtService;
     private readonly ILogger<AuthService> _logger;
 
-    public AuthService(IDatabaseContext context, IPasswordService passwordService, ILogger<AuthService> logger)
+    public AuthService(IDatabaseContext context, IPasswordService passwordService, IJwtService jwtService, ILogger<AuthService> logger)
     {
         _context = context;
         _passwordService = passwordService;
+        _jwtService = jwtService;
         _logger = logger;
     }
 
-    public async Task<Administrator> LoginAsync(string email, string password, RoleType? requiredRole = null)
+    public async Task<JwtResponse> LoginAsync(string email, string password, RoleType? requiredRole = null)
     {
         var administrator = await _context.Administrator
             .Include(a => a.Role)
@@ -51,7 +53,7 @@ public class AuthService : IAuthService
         }
 
         _logger.LogInformation("User logged in successfully: {Email}", email);
-        return administrator;
+        return _jwtService.CreateJwtResponse(administrator);
     }
 }
 

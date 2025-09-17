@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Kont.backend.Services;
 using Kont.backend.DAL;
+using Kont.backend.Models.Request;
 
 namespace Kont.backend.Controllers;
 
@@ -15,6 +16,13 @@ public class AdministratorsController : ControllerBase
     {
         _service = service;
         _logger = logger;
+    }
+
+    [HttpGet("roles")]
+    public async Task<IActionResult> GetRoles()
+    {
+        var roles = await _service.GetRolesAsync();
+        return Ok(roles);
     }
 
     [HttpGet]
@@ -33,10 +41,10 @@ public class AdministratorsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] Administrator admin)
+    public async Task<IActionResult> Create([FromBody] CreateAdministratorRequest createRequest)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        var created = await _service.CreateAdministratorAsync(admin);
+        var created = await _service.CreateAdministratorAsync(createRequest);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 

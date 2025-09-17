@@ -21,7 +21,7 @@ public class Administrator : User
     public Role Role { get; set; }
 
     [Required]
-    public required bool IsActive { get; set; }
+    public bool IsActive { get; set; }
 
     public Subscription Subscription { get; set; }
 }

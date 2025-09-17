@@ -13,6 +13,8 @@ public class Role
     public RoleType RoleType { get; set; } = RoleType.Admin;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public List<Administrator> Administrators { get; set; } = new List<Administrator>();
 }
 
 public enum RoleType

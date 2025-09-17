@@ -1,6 +1,7 @@
 using Kont.backend.Controllers;
 using Kont.backend.DAL;
 using Kont.backend.Services;
+using Kont.backend.Models.Request;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -44,10 +45,43 @@ public class AdministratorsControllerTests
     [Test]
     public async Task Create_ReturnsCreated()
     {
+        var createRequest = new CreateAdministratorRequest 
+        { 
+            Firstname = "A", 
+            Lastname = "B", 
+            Email = "a@b.com", 
+            Password = "p", 
+            PhoneNumber = "0102030405", 
+            Role = new Role(), 
+            IsActive = true,
+            Sites = new List<Site>(),
+            SubscriptionType = SubscriptionType.Stroll
+        };
         var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "A", Lastname = "B", Email = "a@b.com", Password = "p", PhoneNumber = "0102030405", Subscription = new Subscription(), Role = new Role(), IsActive = true };
-        _service.CreateAdministratorAsync(Arg.Any<Administrator>()).Returns(admin);
-        var result = await _controller.Create(admin);
+        _service.CreateAdministratorAsync(Arg.Any<CreateAdministratorRequest>()).Returns(admin);
+        var result = await _controller.Create(createRequest);
         Assert.That(result, Is.InstanceOf<CreatedAtActionResult>());
+    }
+
+    [Test]
+    public async Task Roles_ReturnsOk()
+    {
+        _service.GetRolesAsync().Returns(new List<Role> { new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin } });
+        var result = await _controller.GetRoles();
+        var objectResult = result as ObjectResult;
+        Assert.That(objectResult, Is.Not.Null);
+        Assert.That(objectResult!.StatusCode, Is.EqualTo(200));
+        var roles = objectResult.Value as IEnumerable<Role>;
+        Assert.That(roles, Is.Not.Null);
+        Assert.That(roles!.Any(r => r.RoleType == RoleType.Admin));
+    }
+
+    [Test]
+    public async Task Update_NotFound_WhenMissing()
+    {
+        _service.UpdateAdministratorAsync(Arg.Any<Guid>(), Arg.Any<Administrator>()).Returns((Administrator?)null);
+        var result = await _controller.Update(Guid.NewGuid(), new Administrator { IsActive = true });
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
     }
 
     [Test]

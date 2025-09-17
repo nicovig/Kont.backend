@@ -27,31 +27,31 @@ public class AuthControllerTests
     public async Task Login_WithValidAdminCredentials_ReturnsOk()
     {
         var request = new LoginRequest { Email = "admin@test.com", Password = "password" };
-        var admin = new Administrator
+        var jwtResponse = new JwtResponse
         {
-            Id = Guid.NewGuid(),
+            Token = "jwt_token_here",
+            UserId = Guid.NewGuid(),
+            Role = "Admin",
+            Email = request.Email,
             Firstname = "Admin",
             Lastname = "User",
-            Email = request.Email,
-            Password = "hashed",
-            PhoneNumber = "+33123456789",
-            Subscription = new Subscription { Id = Guid.NewGuid() },
-            Sites = new List<Site>(),
-            Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin },
-            IsActive = true
+            SubscriptionType = SubscriptionType.Klasel,
+            ExpiresAt = DateTime.UtcNow.AddHours(24)
         };
 
-        _authService.LoginAsync(request.Email, request.Password, RoleType.Admin).Returns(admin);
+        _authService.LoginAsync(request.Email, request.Password, RoleType.Admin).Returns(jwtResponse);
 
         var result = await _controller.Login(request);
 
         Assert.That(result, Is.InstanceOf<ObjectResult>());
         var objectResult = (ObjectResult)result;
         Assert.That(objectResult.StatusCode, Is.EqualTo(200));
-        Assert.That(objectResult.Value, Is.InstanceOf<Administrator>());
-        var returned = (Administrator)objectResult.Value!;
+        Assert.That(objectResult.Value, Is.InstanceOf<JwtResponse>());
+        var returned = (JwtResponse)objectResult.Value!;
         Assert.That(returned.Email, Is.EqualTo(request.Email));
-        Assert.That(returned.Role.RoleType, Is.EqualTo(RoleType.Admin));
+        Assert.That(returned.Role, Is.EqualTo("Admin"));
+        Assert.That(returned.Token, Is.Not.Null);
+        Assert.That(returned.UserId, Is.Not.EqualTo(Guid.Empty));
     }
 
     [Test]
@@ -60,7 +60,7 @@ public class AuthControllerTests
         var request = new LoginRequest { Email = "admin@test.com", Password = "wrong" };
 
         _authService.LoginAsync(request.Email, request.Password, RoleType.Admin)
-            .Returns(Task.FromException<Administrator>(new ArgumentException("Invalid credentials")));
+            .Returns(Task.FromException<JwtResponse>(new ArgumentException("Invalid credentials")));
 
         var result = await _controller.Login(request);
 

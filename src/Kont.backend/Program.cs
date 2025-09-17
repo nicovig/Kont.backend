@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,8 @@ using Kont.backend.DAL.DatabaseContext;
 using Kont.backend.Models;
 using Kont.backend.Tools;
 using Kont.backend.Services;
+using Kont.backend.Controllers;
+using Kont.backend.Middleware;
 using Kont.backend;
 
 
@@ -68,25 +71,17 @@ builder.Services.AddCors(options =>
 
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+                .AddJwtBearer(options =>
                 {
-                    options.SaveToken = true;
-                    options.TokenValidationParameters = new TokenValidationParameters()
+                    options.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidateIssuer = true,
-                        ValidateAudience = false,
+                        ValidateAudience = true,
                         ValidateLifetime = true,
                         ValidateIssuerSigningKey = true,
-                    };
-
-                    options.Events = new JwtBearerEvents
-                    {
-                        OnMessageReceived = static context =>
-                        {
-                            if (context.Request.Headers.Authorization.Count == 0 && context.Request.Query.TryGetValue("access_token", out var token))
-                                context.Token = token;
-                            return Task.CompletedTask;
-                        }
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? "default_key_that_should_be_in_config")),
+                        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                        ValidAudience = builder.Configuration["Jwt:Audience"]
                     };
                 });
 
@@ -110,14 +105,14 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ISitesService, SitesService>();
 builder.Services.AddScoped<IAdministratorsService, AdministratorsService>();
 builder.Services.AddScoped<ISubscriptionsService, SubscriptionsService>();
-
-var logger = builder.Services.BuildServiceProvider().GetRequiredService<ILogger<Program>>();
+builder.Services.AddScoped<IJwtService, JwtService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<DatabaseContext>()
     .AddCheck<UrlHealthChecker>("External dependecies");
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Kont.backend.Services.IUserContextService, Kont.backend.Services.UserContextService>();
 
 builder.Services.AddAutoMapper(typeof(Program));
 
@@ -149,7 +144,7 @@ app.UseForwardedHeaders();
 
 app.UseExceptionLoggerMiddleware();
 
-
+app.UseAuthentication();
 app.UseAuthorization();
 
 var provider = new FileExtensionContentTypeProvider();

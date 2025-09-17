@@ -4,7 +4,7 @@ using Kont.backend.Services;
 
 namespace Kont.backend.Controllers;
 
-[Route("admin/[controller]")]
+[Route("[controller]")]
 [ApiController]
 public class GroupsController : ControllerBase
 {

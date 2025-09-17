@@ -21,6 +21,7 @@ public class Subscription
 
 public enum SubscriptionType
 {
+    Esae,
     Deraou,
     Klasel,
     Stroll

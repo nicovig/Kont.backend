@@ -24,12 +24,12 @@ public class SubscriptionsService : ISubscriptionsService
 
     public async Task<IEnumerable<Subscription>> GetSubscriptionsAsync()
     {
-        return await _context.Subscription.AsNoTracking().ToListAsync();
+        return await _context.Subscription.Include(s => s.Administrator).AsNoTracking().ToListAsync();
     }
 
     public async Task<Subscription?> GetSubscriptionAsync(Guid id)
     {
-        return await _context.Subscription.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
+        return await _context.Subscription.Include(s => s.Administrator).AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
     }
 
     public async Task<Subscription> CreateSubscriptionAsync(Subscription sub)

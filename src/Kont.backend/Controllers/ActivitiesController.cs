@@ -1,21 +1,25 @@
 using Microsoft.AspNetCore.Mvc;
 using Kont.backend.DAL;
 using Kont.backend.Services;
+using Kont.backend.Models.Request;
 
 namespace Kont.backend.Controllers;
 
-[Route("admin/[controller]")]
+[Route("[controller]")]
 [ApiController]
 public class ActivitiesController : ControllerBase
 {
     private readonly IActivitiesService _activitiesService;
+    private readonly IUserContextService _userContextService;
     private readonly ILogger<ActivitiesController> _logger;
 
     public ActivitiesController(
         IActivitiesService activitiesService,
+        IUserContextService userContextService,
         ILogger<ActivitiesController> logger)
     {
         _activitiesService = activitiesService;
+        _userContextService = userContextService;
         _logger = logger;
     }
 
@@ -32,9 +36,15 @@ public class ActivitiesController : ControllerBase
     {
         try
         {
+            var currentUser = _userContextService.GetCurrentUser();
+            if (currentUser == null)
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
             var activities = await _activitiesService.GetActivitiesAsync();
 
-            _logger.LogInformation("Retrieved {Count} activities", activities.Count());
+            _logger.LogInformation("Retrieved {Count} activities for user {UserId}", activities.Count(), currentUser.Id);
             return Ok(activities);
         }
         catch (Exception ex)
@@ -89,18 +99,47 @@ public class ActivitiesController : ControllerBase
     [ProducesResponseType(typeof(Activity), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> CreateActivity([FromBody] Activity activity)
+    public async Task<IActionResult> CreateActivity([FromBody] CreateActivityRequest createActivityRequest)
     {
         try
         {
+            var currentUser = _userContextService.GetCurrentUser();
+            if (currentUser == null)
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
 
+            var sum = createActivityRequest.ScoringMetrics.Sum(m => m.Coefficient);
+            if (Math.Abs(sum - 1) > 1e-6)
+            {
+                return BadRequest(new { message = "Sum of coefficients must equal 1" });
+            }
+
+            var activity = new Activity
+            {
+                Name = createActivityRequest.Name,
+                Description = createActivityRequest.Description,
+                Site = createActivityRequest.Site,
+                ScoringMetrics = createActivityRequest.ScoringMetrics.Select(sm => new ScoringMetric
+                {
+                    Name = sm.Name,
+                    Unit = sm.Unit,
+                    HigherIsBetter = sm.HigherIsBetter,
+                    Coefficient = sm.Coefficient
+                }).ToList(),
+                CreatedBy = currentUser,
+                CreatedAt = DateTime.UtcNow
+            };
+
             var createdActivity = await _activitiesService.CreateActivityAsync(activity);
 
-            _logger.LogInformation("Created activity {Id} with name {Name}", createdActivity.Id, createdActivity.Name);
+            _logger.LogInformation("Created activity {Id} with name {Name} by user {UserId}", 
+                createdActivity.Id, createdActivity.Name, currentUser.Id);
 
             return CreatedAtAction(nameof(GetActivity), new { id = createdActivity.Id }, createdActivity);
         }
@@ -126,11 +165,11 @@ public class ActivitiesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> UpdateActivity(Guid id, [FromBody] Activity activity)
+    public async Task<IActionResult> UpdateActivity(Guid id, [FromBody] UpdateActivityRequest updateActivityRequest)
     {
         try
         {
-            if (id != activity.Id)
+            if (id != updateActivityRequest.Id)
             {
                 return BadRequest(new { message = "ID mismatch" });
             }
@@ -140,7 +179,13 @@ public class ActivitiesController : ControllerBase
                 return BadRequest(ModelState);
             }
 
-            var updatedActivity = await _activitiesService.UpdateActivityAsync(id, activity);
+            var coeffSum = updateActivityRequest.ScoringMetrics.Sum(m => m.Coefficient);
+            if (Math.Abs(coeffSum - 1) > 1e-6)
+            {
+                return BadRequest(new { message = "Sum of coefficients must equal 1" });
+            }
+
+            var updatedActivity = await _activitiesService.UpdateActivityAsync(id, updateActivityRequest);
             if (updatedActivity == null)
             {
                 _logger.LogWarning("Activity with ID {Id} not found for update", id);

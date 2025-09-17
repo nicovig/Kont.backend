@@ -27,29 +27,29 @@ public class GodControllerTests
     public async Task Login_WithValidGodCredentials_ReturnsOk()
     {
         var request = new LoginRequest { Email = "god@test.com", Password = "password" };
-        var user = new Administrator
+        var jwtResponse = new JwtResponse
         {
-            Id = Guid.NewGuid(),
+            Token = "jwt_token_here",
+            UserId = Guid.NewGuid(),
+            Role = "God",
+            Email = request.Email,
             Firstname = "God",
             Lastname = "User",
-            Email = request.Email,
-            Password = "hashed",
-            PhoneNumber = "+33123456789",
-            Subscription = new Subscription { Id = Guid.NewGuid() },
-            Sites = new List<Site>(),
-            Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.God },
-            IsActive = true
+            SubscriptionType = SubscriptionType.Klasel,
+            ExpiresAt = DateTime.UtcNow.AddHours(24)
         };
 
-        _authService.LoginAsync(request.Email, request.Password, RoleType.God).Returns(user);
+        _authService.LoginAsync(request.Email, request.Password, RoleType.God).Returns(jwtResponse);
 
         var result = await _controller.Login(request);
 
         Assert.That(result, Is.InstanceOf<ObjectResult>());
         var objectResult = (ObjectResult)result;
         Assert.That(objectResult.StatusCode, Is.EqualTo(200));
-        var returned = (Administrator)objectResult.Value!;
-        Assert.That(returned.Role.RoleType, Is.EqualTo(RoleType.God));
+        var returned = (JwtResponse)objectResult.Value!;
+        Assert.That(returned.Role, Is.EqualTo("God"));
+        Assert.That(returned.Token, Is.Not.Null);
+        Assert.That(returned.UserId, Is.Not.EqualTo(Guid.Empty));
     }
 
     [Test]
@@ -58,7 +58,7 @@ public class GodControllerTests
         var request = new LoginRequest { Email = "god@test.com", Password = "password" };
 
         _authService.LoginAsync(request.Email, request.Password, RoleType.God)
-            .Returns(Task.FromException<Administrator>(new ArgumentException("Invalid credentials")));
+            .Returns(Task.FromException<JwtResponse>(new ArgumentException("Invalid credentials")));
 
         var result = await _controller.Login(request);
 
