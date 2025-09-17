@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using Kont.backend.DAL;
-using Kont.backend.DAL.DatabaseContext;
 
 namespace Kont.backend.Models.Request;
 

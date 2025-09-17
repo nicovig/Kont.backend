@@ -28,6 +28,7 @@ public class EventsService : IEventsService
         return await _context.Event
             .Include(e => e.Site)
             .Include(e => e.Activities)
+            .Include(e => e.Pools)
             .Include(e => e.CreatedBy)
             .ToListAsync();
     }
@@ -37,6 +38,7 @@ public class EventsService : IEventsService
         return await _context.Event
             .Include(e => e.Site)
             .Include(e => e.Activities)
+            .Include(e => e.Pools)
             .Include(e => e.CreatedBy)
             .FirstOrDefaultAsync(e => e.Id == id);
     }
@@ -68,12 +70,30 @@ public class EventsService : IEventsService
 
         _context.Event.Add(ev);
         await _context.SaveChangesAsync();
+
+        var pool = new Pool
+        {
+            Id = Guid.NewGuid(),
+            Name = ev.Name,
+            Description = null,
+            QrCode = ev.EventLink,
+            Event = ev,
+            StartedAt = ev.StartedAt,
+            EndedAt = ev.EndedAt,
+            Status = PoolStatus.Pending,
+            IsActive = true,
+        };
+        _context.Pool.Add(pool);
+        await _context.SaveChangesAsync();
         return ev;
     }
 
     public async Task<Event?> UpdateEventAsync(Guid id, UpdateEventRequest request)
     {
-        var existing = await _context.Event.Include(e => e.Activities).FirstOrDefaultAsync(e => e.Id == id);
+        var existing = await _context.Event
+            .Include(e => e.Activities)
+            .Include(e => e.Pools)
+            .FirstOrDefaultAsync(e => e.Id == id);
         if (existing == null) return null;
 
         var activities = await _context.Activity.Where(a => request.ActivityIds.Contains(a.Id)).ToListAsync();
@@ -89,6 +109,36 @@ public class EventsService : IEventsService
         {
             var site = await _context.Site.FindAsync(request.SiteId) ?? throw new ArgumentException("Site not found");
             existing.Site = site;
+        }
+
+        await _context.SaveChangesAsync();
+
+        var pool = existing.Pools.FirstOrDefault();
+        if (pool == null)
+        {
+            pool = new Pool
+            {
+                Id = Guid.NewGuid(),
+                Name = existing.Name,
+                Description = null,
+                QrCode = existing.EventLink,
+                Event = existing,
+                StartedAt = existing.StartedAt,
+                EndedAt = existing.EndedAt,
+                Status = PoolStatus.Pending,
+                IsActive = true,
+            };
+            _context.Pool.Add(pool);
+        }
+        else
+        {
+            pool.Name = existing.Name;
+            pool.StartedAt = existing.StartedAt;
+            pool.EndedAt = existing.EndedAt;
+            if (!string.IsNullOrWhiteSpace(existing.EventLink))
+            {
+                pool.QrCode = existing.EventLink;
+            }
         }
 
         await _context.SaveChangesAsync();

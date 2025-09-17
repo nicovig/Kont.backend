@@ -12,8 +12,6 @@ using Kont.backend.DAL.DatabaseContext;
 using Kont.backend.Models;
 using Kont.backend.Tools;
 using Kont.backend.Services;
-using Kont.backend.Controllers;
-using Kont.backend.Middleware;
 using Kont.backend;
 
 
@@ -99,7 +97,6 @@ builder.Services.AddScoped<IScoreCalculationService, ScoreCalculationService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IActivitiesService, ActivitiesService>();
 builder.Services.AddScoped<IGroupsService, GroupsService>();
-builder.Services.AddScoped<IPoolsService, PoolsService>();
 builder.Services.AddScoped<IReferentsService, ReferentsService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ISitesService, SitesService>();
@@ -107,6 +104,7 @@ builder.Services.AddScoped<IAdministratorsService, AdministratorsService>();
 builder.Services.AddScoped<ISubscriptionsService, SubscriptionsService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IEventsService, EventsService>();
+builder.Services.AddScoped<IGameSessionsService, GameSessionsService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<DatabaseContext>()

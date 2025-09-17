@@ -2,10 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using Kont.backend.Services;
 using Kont.backend.Models.Request;
 using Kont.backend.DAL;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Kont.backend.Controllers;
 
 [Route("[controller]")]
+[Authorize(Roles = $"{nameof(RoleType.Admin)},{nameof(RoleType.Manager)}")]
 [ApiController]
 public class EventsController : ControllerBase
 {

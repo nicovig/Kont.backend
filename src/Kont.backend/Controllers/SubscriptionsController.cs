@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Kont.backend.Services;
 using Kont.backend.DAL;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Kont.backend.Controllers;
 
 [Route("[controller]")]
+[Authorize(Roles = nameof(RoleType.God))]
 [ApiController]
 public class SubscriptionsController : ControllerBase
 {
