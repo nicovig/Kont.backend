@@ -106,6 +106,7 @@ builder.Services.AddScoped<ISitesService, SitesService>();
 builder.Services.AddScoped<IAdministratorsService, AdministratorsService>();
 builder.Services.AddScoped<ISubscriptionsService, SubscriptionsService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<IEventsService, EventsService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<DatabaseContext>()

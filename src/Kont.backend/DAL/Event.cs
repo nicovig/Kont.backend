@@ -28,11 +28,14 @@ public class Event
     
     public EventStatus Status { get; set; } = EventStatus.Pending;
 
+    [Required]
+    public Administrator CreatedBy { get; set; } = null!;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public List<Activity> Activities { get; set; } = new List<Activity>();
 
-    public List<Pool> Pools { get; set; } = new List<Pool>();    
+    public List<Pool> Pools { get; set; } = new List<Pool>();
 }
 
 
