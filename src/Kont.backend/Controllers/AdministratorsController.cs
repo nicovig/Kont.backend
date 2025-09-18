@@ -7,20 +7,31 @@ using Microsoft.AspNetCore.Authorization;
 namespace Kont.backend.Controllers;
 
 [Route("[controller]")]
-[Authorize(Roles = nameof(RoleType.God))]
 [ApiController]
 public class AdministratorsController : ControllerBase
 {
     private readonly IAdministratorsService _service;
+    private readonly IUserContextService _userContextService;
     private readonly ILogger<AdministratorsController> _logger;
 
-    public AdministratorsController(IAdministratorsService service, ILogger<AdministratorsController> logger)
+    public AdministratorsController(IAdministratorsService service, IUserContextService userContextService, ILogger<AdministratorsController> logger)
     {
         _service = service;
+        _userContextService = userContextService;
         _logger = logger;
     }
 
+    [HttpGet("current")]
+    [Authorize(Roles = nameof(RoleType.Admin))]
+    public async Task<IActionResult> GetCurrent()
+    {
+        var admin = await _userContextService.GetCurrentUserAsync();
+        if (admin == null) return NotFound(new { message = "Administrator not found" });
+        return Ok(admin);
+    }
+
     [HttpGet("roles")]
+    [Authorize(Roles = nameof(RoleType.God))]
     public async Task<IActionResult> GetRoles()
     {
         var roles = await _service.GetRolesAsync();
@@ -28,6 +39,7 @@ public class AdministratorsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = nameof(RoleType.God))]
     public async Task<IActionResult> GetAll()
     {
         var list = await _service.GetAdministratorsAsync();
@@ -35,6 +47,7 @@ public class AdministratorsController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [Authorize(Roles = nameof(RoleType.God))]
     public async Task<IActionResult> GetById(Guid id)
     {
         var admin = await _service.GetAdministratorAsync(id);
@@ -43,6 +56,7 @@ public class AdministratorsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = nameof(RoleType.God))]
     public async Task<IActionResult> Create([FromBody] CreateAdministratorRequest createRequest)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -51,6 +65,7 @@ public class AdministratorsController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = nameof(RoleType.God))]
     public async Task<IActionResult> Update(Guid id, [FromBody] Administrator admin)
     {
         var updated = await _service.UpdateAdministratorAsync(id, admin);
@@ -59,6 +74,7 @@ public class AdministratorsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = nameof(RoleType.God))]
     public async Task<IActionResult> Delete(Guid id)
     {
         var ok = await _service.DeleteAdministratorAsync(id);

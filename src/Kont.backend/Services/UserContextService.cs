@@ -1,17 +1,31 @@
 using Kont.backend.DAL;
+using Kont.backend.DAL.DatabaseContext;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace Kont.backend.Services;
+
+public interface IUserContextService
+{
+    Administrator? GetCurrentUser();
+
+    Task<Administrator?> GetCurrentUserAsync();
+    bool IsUserAuthenticated();
+    Guid? GetCurrentUserId();
+}
+
 
 public class UserContextService : IUserContextService
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<UserContextService> _logger;
+    private readonly IDatabaseContext _context;
 
-    public UserContextService(IHttpContextAccessor httpContextAccessor, ILogger<UserContextService> logger)
+    public UserContextService(IHttpContextAccessor httpContextAccessor, ILogger<UserContextService> logger, IDatabaseContext context)
     {
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
+        _context = context;
     }
 
     public Administrator? GetCurrentUser()
@@ -50,6 +64,37 @@ public class UserContextService : IUserContextService
             PhoneNumber = string.Empty,
             Sites = new List<Site>(),
         };
+
+        return admin;
+    }
+
+    public async Task<Administrator?> GetCurrentUserAsync()
+    {
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext == null)
+        {
+            return null;
+        }
+
+        var principal = httpContext.User;
+        if (principal?.Identity?.IsAuthenticated != true)
+        {
+            return null;
+        }
+
+        var idClaim = principal.FindFirst(ClaimTypes.NameIdentifier) ?? principal.FindFirst("UserId");
+
+        if (idClaim == null || !Guid.TryParse(idClaim.Value, out var userId))
+        {
+            return null;
+        }
+
+        var admin = await _context.Administrator
+            .Include(a => a.Role)
+            .Include(a => a.Subscription)
+            .Include(a => a.Sites)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == userId);
 
         return admin;
     }

@@ -43,6 +43,19 @@ public class EventsControllerTests
         var result = await _controller.Create(req);
         Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(401));
     }
+
+    [Test]
+    public async Task UpdateEventAllPlayersPresent_ReturnsOkOrNotFound()
+    {
+        var eventId = Guid.NewGuid();
+        _events.UpdateEventAllPlayersPresentAsync(eventId, true).Returns(new Event { Id = eventId, Site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" }, Pools = new List<Pool> { new Pool { Id = Guid.NewGuid(), Name = "P", QrCode = "q", IsAllPlayersPresent = true } } });
+        var ok = await _controller.UpdateEventAllPlayersPresent(eventId, true);
+        Assert.That(ok, Is.InstanceOf<ObjectResult>());
+
+        _events.UpdateEventAllPlayersPresentAsync(eventId, true).Returns((Event?)null);
+        var nf = await _controller.UpdateEventAllPlayersPresent(eventId, true);
+        Assert.That(nf, Is.InstanceOf<NotFoundObjectResult>());
+    }
 }
 
 

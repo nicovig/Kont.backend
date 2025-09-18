@@ -12,6 +12,7 @@ public class AdministratorsControllerTests
 {
     private IAdministratorsService _service = null!;
     private ILogger<AdministratorsController> _logger = null!;
+    private IUserContextService _userContextService = null!;
     private AdministratorsController _controller = null!;
 
     [SetUp]
@@ -19,7 +20,7 @@ public class AdministratorsControllerTests
     {
         _service = Substitute.For<IAdministratorsService>();
         _logger = Substitute.For<ILogger<AdministratorsController>>();
-        _controller = new AdministratorsController(_service, _logger);
+        _controller = new AdministratorsController(_service, _userContextService, _logger);
     }
 
     [Test]

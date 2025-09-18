@@ -2,6 +2,7 @@ using Kont.backend.DAL;
 using Kont.backend.DAL.DatabaseContext;
 using Microsoft.EntityFrameworkCore;
 using Kont.backend.Models.Request;
+using Microsoft.Extensions.Logging;
 
 namespace Kont.backend.Services;
 
@@ -12,6 +13,7 @@ public interface IEventsService
     Task<Event> CreateEventAsync(CreateEventRequest request, Guid createdById);
     Task<Event?> UpdateEventAsync(Guid id, UpdateEventRequest request);
     Task<bool> DeleteEventAsync(Guid id);
+    Task<Event?> UpdateEventAllPlayersPresentAsync(Guid eventId, bool isAllPlayersPresent);
 }
 
 public class EventsService : IEventsService
@@ -47,6 +49,13 @@ public class EventsService : IEventsService
     {
         var site = await _context.Site.FindAsync(request.SiteId) ?? throw new ArgumentException("Site not found");
         var admin = await _context.Administrator.FindAsync(createdById) ?? throw new ArgumentException("Administrator not found");
+
+        var createdEventLength = await _context.Event.CountAsync(e => e.CreatedBy.Id == createdById);
+
+        if (admin.Subscription.SubscriptionType == SubscriptionType.Esae && createdEventLength > 0 || 
+            admin.Subscription.SubscriptionType == SubscriptionType.Deraou && createdEventLength > 3) {
+            throw new ArgumentException("You have reached the maximum number of events for your subscription");
+        }
 
         var activities = new List<Activity>();
         if (request.ActivityIds?.Count > 0)
@@ -152,6 +161,16 @@ public class EventsService : IEventsService
         _context.Event.Remove(ev);
         await _context.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<Event?> UpdateEventAllPlayersPresentAsync(Guid eventId, bool isAllPlayersPresent)
+    {
+        var eventDb = await _context.Event.Include(e => e.Pools).FirstOrDefaultAsync(e => e.Id == eventId);
+        if (eventDb == null) return null;
+        if (eventDb.Pools.Count == 0) return null;
+        eventDb.Pools[0].IsAllPlayersPresent = isAllPlayersPresent;
+        await _context.SaveChangesAsync();
+        return eventDb;
     }
 }
 

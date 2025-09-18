@@ -79,6 +79,16 @@ public class EventsController : ControllerBase
         if (!ok) return NotFound(new { message = "Event not found" });
         return NoContent();
     }
+
+    [HttpPut("{id}/all-players-present")]
+    [ProducesResponseType(typeof(Event), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateEventAllPlayersPresent(Guid id, [FromQuery] bool isAllPlayersPresent)
+    {
+        var pool = await _eventsService.UpdateEventAllPlayersPresentAsync(id, isAllPlayersPresent);
+        if (pool == null) return NotFound(new { message = "Pool not found" });
+        return Ok(pool);
+    }
 }
 
 

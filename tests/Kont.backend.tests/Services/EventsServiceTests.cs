@@ -32,7 +32,7 @@ public class EventsServiceTests
     public async Task CreateEvent_CreatesEventAndPool()
     {
         var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
-        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Stroll } };
         _db.Site.Add(site);
         _db.Administrator.Add(admin);
         await _db.SaveChangesAsync();
@@ -60,7 +60,7 @@ public class EventsServiceTests
     public async Task GetEvents_ReturnsList()
     {
         var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
-        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Stroll } };
         _db.Site.Add(site);
         _db.Administrator.Add(admin);
         await _db.SaveChangesAsync();
@@ -75,7 +75,7 @@ public class EventsServiceTests
     public async Task UpdateEvent_UpdatesAndSyncsPool()
     {
         var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
-        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Stroll } };
         _db.Site.Add(site);
         _db.Administrator.Add(admin);
         await _db.SaveChangesAsync();
@@ -105,7 +105,7 @@ public class EventsServiceTests
     public async Task DeleteEvent_RemovesEvent()
     {
         var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
-        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Stroll } };
         _db.Site.Add(site);
         _db.Administrator.Add(admin);
         await _db.SaveChangesAsync();
@@ -118,10 +118,26 @@ public class EventsServiceTests
     }
 
     [Test]
+    public async Task UpdateEventAllPlayersPresent_UpdatesFlag()
+    {
+        var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Stroll } };
+        _db.Site.Add(site);
+        _db.Administrator.Add(admin);
+        await _db.SaveChangesAsync();
+
+        var created = await _service.CreateEventAsync(new CreateEventRequest { Name = "EV", EventLink = "link", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(1), SiteId = site.Id, Status = EventStatus.Pending, ActivityIds = new List<Guid>() }, admin.Id);
+
+        var updated = await _service.UpdateEventAllPlayersPresentAsync(created.Id, true);
+        Assert.That(updated, Is.Not.Null);
+        Assert.That(updated!.Pools[0].IsAllPlayersPresent, Is.True);
+    }
+
+    [Test]
     public async Task CreateEvent_Succeeds_WithExistingSiteAndAdmin()
     {
         var site = new Site { Id = Guid.NewGuid(), Name = "X", Address = "1", City = "P", ZipCode = "75000", Country = "FR", State = "IDF", PhoneNumber = "01", Email = "s@e.com" };
-        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "J", Lastname = "D", Email = "a@b.c", Password = "x", PhoneNumber = "01", SubscriptionId = Guid.NewGuid(), Sites = new(), Role = new Role { RoleType = RoleType.Admin }, IsActive = true };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "J", Lastname = "D", Email = "a@b.c", Password = "x", PhoneNumber = "01", SubscriptionId = Guid.NewGuid(), Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Stroll }, Sites = new(), Role = new Role { RoleType = RoleType.Admin }, IsActive = true };
         _db.Site.Add(site);
         _db.Administrator.Add(admin);
         await (_db as DatabaseContext)!.SaveChangesAsync();
@@ -131,6 +147,49 @@ public class EventsServiceTests
         Assert.That(ev.Id, Is.Not.EqualTo(Guid.Empty));
         Assert.That(ev.Site.Id, Is.EqualTo(site.Id));
         Assert.That(ev.CreatedBy.Id, Is.EqualTo(admin.Id));
+    }
+
+    [Test]
+    public async Task CreateEvent_Throws_WhenSubscriptionLimitReached_Esae()
+    {
+        var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Esae } };
+        _db.Site.Add(site);
+        _db.Administrator.Add(admin);
+        await _db.SaveChangesAsync();
+
+        var req = new CreateEventRequest { Name = "E1", EventLink = "link1", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(1), SiteId = site.Id, Status = EventStatus.Pending, ActivityIds = new List<Guid>() };
+        await _service.CreateEventAsync(req, admin.Id);
+
+        var ex = Assert.ThrowsAsync<ArgumentException>(async () =>
+        {
+            var req2 = new CreateEventRequest { Name = "E2", EventLink = "link2", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(2), SiteId = site.Id, Status = EventStatus.Pending, ActivityIds = new List<Guid>() };
+            await _service.CreateEventAsync(req2, admin.Id);
+        });
+        Assert.That(ex!.Message, Does.Contain("maximum number of events"));
+    }
+
+    [Test]
+    public async Task CreateEvent_Throws_WhenSubscriptionLimitReached_Deraou()
+    {
+        var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Deraou } };
+        _db.Site.Add(site);
+        _db.Administrator.Add(admin);
+        await _db.SaveChangesAsync();
+
+        for (int i = 0; i < 4; i++)
+        {
+            var req = new CreateEventRequest { Name = $"E{i}", EventLink = $"link{i}", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(1), SiteId = site.Id, Status = EventStatus.Pending, ActivityIds = new List<Guid>() };
+            await _service.CreateEventAsync(req, admin.Id);
+        }
+
+        var ex = Assert.ThrowsAsync<ArgumentException>(async () =>
+        {
+            var req5 = new CreateEventRequest { Name = "E5", EventLink = "link5", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(1), SiteId = site.Id, Status = EventStatus.Pending, ActivityIds = new List<Guid>() };
+            await _service.CreateEventAsync(req5, admin.Id);
+        });
+        Assert.That(ex!.Message, Does.Contain("maximum number of events"));
     }
 }
 
