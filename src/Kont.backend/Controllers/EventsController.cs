@@ -13,15 +13,18 @@ public class EventsController : ControllerBase
 {
     private readonly IEventsService _eventsService;
     private readonly IUserContextService _userContextService;
+    private readonly IEventInvitationService _eventInvitationService;
     private readonly ILogger<EventsController> _logger;
 
     public EventsController(
         IEventsService eventsService,
         IUserContextService userContextService,
+        IEventInvitationService eventInvitationService,
         ILogger<EventsController> logger)
     {
         _eventsService = eventsService;
         _userContextService = userContextService;
+        _eventInvitationService = eventInvitationService;
         _logger = logger;
     }
 
@@ -88,6 +91,33 @@ public class EventsController : ControllerBase
         var pool = await _eventsService.UpdateEventAllPlayersPresentAsync(id, isAllPlayersPresent);
         if (pool == null) return NotFound(new { message = "Pool not found" });
         return Ok(pool);
+    }
+
+    [HttpPost("{id}/send-qr-codes")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SendQRCodeToEmailList(Guid id, [FromBody] List<string> emails)
+    {
+        if (emails == null || !emails.Any()) return BadRequest(new { message = "Email list is required" });
+        
+        var currentUser = _userContextService.GetCurrentUser();
+        if (currentUser == null) return Unauthorized(new { message = "User not authenticated" });
+
+        try
+        {
+            await _eventInvitationService.SendQRCodeToEmailListAsync(id, emails, currentUser.Id);
+            return Ok(new { message = "QR codes sent successfully" });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending QR codes for event {EventId}", id);
+            return StatusCode(500, new { message = "Internal server error" });
+        }
     }
 }
 

@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Logging;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.AspNetCore.Mvc.ViewEngines;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Kont.backend.DAL.DatabaseContext;
 using Kont.backend.Models;
 using Kont.backend.Tools;
@@ -105,6 +107,10 @@ builder.Services.AddScoped<ISubscriptionsService, SubscriptionsService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IEventsService, EventsService>();
 builder.Services.AddScoped<IGameSessionsService, GameSessionsService>();
+builder.Services.AddScoped<IQrCodeService, QrCodeService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
+builder.Services.AddScoped<IEventInvitationService, EventInvitationService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<DatabaseContext>()
@@ -118,6 +124,11 @@ builder.Services.AddAutoMapper(typeof(Program));
 builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Add Razor view engine for email templates
+builder.Services.AddMvc().AddRazorRuntimeCompilation();
+builder.Services.AddScoped<ICompositeViewEngine, CompositeViewEngine>();
+builder.Services.AddScoped<ITempDataProvider, SessionStateTempDataProvider>();
 
 var app = builder.Build();
 

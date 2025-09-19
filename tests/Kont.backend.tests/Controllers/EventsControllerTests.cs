@@ -13,6 +13,7 @@ public class EventsControllerTests
 {
     private IEventsService _events;
     private IUserContextService _userCtx;
+    private IEventInvitationService _eventInvitation;
     private ILogger<EventsController> _logger;
     private EventsController _controller;
 
@@ -21,8 +22,9 @@ public class EventsControllerTests
     {
         _events = Substitute.For<IEventsService>();
         _userCtx = Substitute.For<IUserContextService>();
+        _eventInvitation = Substitute.For<IEventInvitationService>();
         _logger = Substitute.For<ILogger<EventsController>>();
-        _controller = new EventsController(_events, _userCtx, _logger);
+        _controller = new EventsController(_events, _userCtx, _eventInvitation, _logger);
     }
 
     [Test]
@@ -55,6 +57,64 @@ public class EventsControllerTests
         _events.UpdateEventAllPlayersPresentAsync(eventId, true).Returns((Event?)null);
         var nf = await _controller.UpdateEventAllPlayersPresent(eventId, true);
         Assert.That(nf, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public async Task SendQRCodeToEmailList_ReturnsOk_WhenValidRequest()
+    {
+        var eventId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        var emails = new List<string> { "test@example.com", "test2@example.com" };
+
+        _userCtx.GetCurrentUser().Returns(new Administrator { Id = adminId, Firstname = "Test", Lastname = "User", Email = "admin@test.com", Password = "pwd", PhoneNumber = "123", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Stroll } });
+
+        var result = await _controller.SendQRCodeToEmailList(eventId, emails);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(200));
+        await _eventInvitation.Received(1).SendQRCodeToEmailListAsync(eventId, emails, adminId);
+    }
+
+    [Test]
+    public async Task SendQRCodeToEmailList_ReturnsUnauthorized_WhenNoUser()
+    {
+        var eventId = Guid.NewGuid();
+        var emails = new List<string> { "test@example.com" };
+
+        _userCtx.GetCurrentUser().Returns((Administrator?)null);
+
+        var result = await _controller.SendQRCodeToEmailList(eventId, emails);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(401));
+    }
+
+    [Test]
+    public async Task SendQRCodeToEmailList_ReturnsBadRequest_WhenArgumentException()
+    {
+        var eventId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        var emails = new List<string> { "test@example.com" };
+
+        _userCtx.GetCurrentUser().Returns(new Administrator { Id = adminId, Firstname = "Test", Lastname = "User", Email = "admin@test.com", Password = "pwd", PhoneNumber = "123", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Stroll } });
+        _eventInvitation.SendQRCodeToEmailListAsync(eventId, emails, adminId).Returns(Task.FromException(new ArgumentException("Event not found")));
+
+        var result = await _controller.SendQRCodeToEmailList(eventId, emails);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(400));
+    }
+
+    [Test]
+    public async Task SendQRCodeToEmailList_ReturnsBadRequest_WhenEmptyEmailList()
+    {
+        var eventId = Guid.NewGuid();
+        var emails = new List<string>();
+
+        var result = await _controller.SendQRCodeToEmailList(eventId, emails);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(400));
     }
 }
 

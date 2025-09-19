@@ -1,0 +1,175 @@
+@model Kont.backend.Models.Email.EventInvitationEmailModel
+@{
+    Layout = null;
+    var isFrench = Model.Locale == "fr";
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@(isFrench ? "Rejoignez votre événement Kont !" : "Join your Kont event!")</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            padding: 20px; 
+            background-color: #f5f5f5;
+        }
+        .email-container {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+            padding: 30px; 
+            text-align: center; 
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .content { 
+            padding: 30px; 
+        }
+        .description {
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        .event-info { 
+            background: #f8f9fa; 
+            padding: 20px; 
+            border-radius: 8px; 
+            margin: 20px 0; 
+            border-left: 4px solid #667eea; 
+        }
+        .event-info h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        .event-info p {
+            margin: 8px 0;
+        }
+        .qr-container { 
+            text-align: center; 
+            margin: 30px 0; 
+        }
+        .qr-code { 
+            border: 3px solid #667eea; 
+            border-radius: 10px; 
+            padding: 20px; 
+            background: white; 
+            display: inline-block; 
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .qr-code img {
+            max-width: 200px; 
+            height: auto;
+        }
+        .instruction {
+            text-align: center;
+            font-size: 16px;
+            margin: 20px 0;
+            color: #666;
+        }
+        .cta-button { 
+            display: inline-block; 
+            background: #667eea; 
+            color: white; 
+            padding: 15px 30px; 
+            text-decoration: none; 
+            border-radius: 5px; 
+            font-weight: bold; 
+            margin: 20px 0; 
+            transition: background-color 0.3s ease;
+        }
+        .cta-button:hover {
+            background: #5a6fd8;
+        }
+        .footer { 
+            text-align: center; 
+            color: #666; 
+            font-size: 12px; 
+            margin-top: 30px; 
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+        .brand {
+            font-weight: bold;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <h1>@(isFrench ? "Rejoignez votre événement Kont !" : "Join your Kont event!")</h1>
+        </div>
+        
+        <div class="content">
+            <div class="description">
+                @if (isFrench)
+                {
+                    <p>Vous êtes invité à rejoindre l'événement <strong>@Model.EventName</strong> dans le groupe <strong>@Model.PoolName</strong>.</p>
+                }
+                else
+                {
+                    <p>You are invited to join the event <strong>@Model.EventName</strong> in the group <strong>@Model.PoolName</strong>.</p>
+                }
+            </div>
+            
+            <div class="event-info">
+                <h3>@Model.EventName</h3>
+                <p><strong>@(isFrench ? "Groupe:" : "Group:")</strong> @Model.PoolName</p>
+                <p><strong>@(isFrench ? "Site:" : "Site:")</strong> @Model.SiteName</p>
+                <p><strong>@(isFrench ? "Date:" : "Date:")</strong> @Model.EventDate.ToString("dd/MM/yyyy HH:mm")</p>
+            </div>
+
+            <div class="instruction">
+                @if (isFrench)
+                {
+                    <p>Scannez le QR Code ci-dessous ou cliquez sur le lien pour rejoindre l'événement :</p>
+                }
+                else
+                {
+                    <p>Scan the QR Code below or click the link to join the event:</p>
+                }
+            </div>
+            
+            <div class="qr-container">
+                <div class="qr-code">
+                    <img src="data:image/png;base64,@Model.QrCodeBase64" alt="QR Code" />
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="@Model.JoinUrl" class="cta-button">
+                    @(isFrench ? "Rejoindre l'événement" : "Join the event")
+                </a>
+            </div>
+
+            <div class="footer">
+                <p>
+                    @if (isFrench)
+                    {
+                        <span>Cet email a été envoyé automatiquement par <span class="brand">Kont</span>. Ne pas répondre à cet email.</span>
+                    }
+                    else
+                    {
+                        <span>This email was automatically sent by <span class="brand">Kont</span>. Please do not reply to this email.</span>
+                    }
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
