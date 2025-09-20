@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Kont.backend.Services;
 using Kont.backend.Models.Request;
+using Kont.backend.Models.Response;
 using Kont.backend.DAL;
 using Microsoft.AspNetCore.Authorization;
 
@@ -116,6 +117,30 @@ public class EventsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending QR codes for event {EventId}", id);
+            return StatusCode(500, new { message = "Internal server error" });
+        }
+    }
+
+    [HttpGet("{id}/player-registrations")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPlayerRegistrations(Guid id)
+    {
+        var currentUser = _userContextService.GetCurrentUser();
+        if (currentUser == null) return Unauthorized(new { message = "User not authenticated" });
+
+        try
+        {
+            var registrations = await _eventsService.GetPlayerRegistrationsByEventAsync(id);
+            return Ok(registrations);
+        }
+        catch (ArgumentException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting player registrations for event {EventId}", id);
             return StatusCode(500, new { message = "Internal server error" });
         }
     }

@@ -56,7 +56,7 @@ public class DatabaseContext : DbContext, IDatabaseContext
             .Property(e => e.SubscriptionType)
             .HasConversion(new EnumToStringConverter<SubscriptionType>());
 
-        modelBuilder.Entity<Player>()
+        modelBuilder.Entity<PlayerRegistration>()
             .Property(e => e.PlayerType)
             .HasConversion(new EnumToStringConverter<PlayerType>());
 

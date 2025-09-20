@@ -11,13 +11,4 @@ public class Player : User
     [Required]
     [StringLength(50)]
     public string Username { get; set; } = null!;
-    
-    [Required]
-    public PlayerType PlayerType { get; set; } = PlayerType.Player;
-}
-
-public enum PlayerType
-{
-    Player,
-    KeyPlayer
 }

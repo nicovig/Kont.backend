@@ -4,6 +4,7 @@ using NSubstitute;
 using Kont.backend.Controllers;
 using Kont.backend.Services;
 using Kont.backend.Models.Request;
+using Kont.backend.Models.Response;
 using Kont.backend.DAL;
 
 namespace Kont.backend.tests.Controllers;
@@ -115,6 +116,54 @@ public class EventsControllerTests
 
         Assert.That(result, Is.InstanceOf<ObjectResult>());
         Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(400));
+    }
+
+    [Test]
+    public async Task GetPlayerRegistrations_ReturnsOk_WhenValidEvent()
+    {
+        var eventId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+        var registrations = new List<PlayerRegistrationResponse>
+        {
+            new() { Id = Guid.NewGuid(), PlayerFirstname = "John", PlayerLastname = "Doe", PlayerEmail = "john@test.com", PlayerUsername = "john_doe", PlayerType = PlayerType.Player, RegisteredAt = DateTime.UtcNow }
+        };
+
+        _userCtx.GetCurrentUser().Returns(new Administrator { Id = adminId, Firstname = "Test", Lastname = "User", Email = "admin@test.com", Password = "pwd", PhoneNumber = "123", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Stroll } });
+        _events.GetPlayerRegistrationsByEventAsync(eventId).Returns(Task.FromResult<IEnumerable<PlayerRegistrationResponse>>(registrations));
+
+        var result = await _controller.GetPlayerRegistrations(eventId);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(200));
+        await _events.Received(1).GetPlayerRegistrationsByEventAsync(eventId);
+    }
+
+    [Test]
+    public async Task GetPlayerRegistrations_ReturnsUnauthorized_WhenNoUser()
+    {
+        var eventId = Guid.NewGuid();
+
+        _userCtx.GetCurrentUser().Returns((Administrator?)null);
+
+        var result = await _controller.GetPlayerRegistrations(eventId);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(401));
+    }
+
+    [Test]
+    public async Task GetPlayerRegistrations_ReturnsNotFound_WhenArgumentException()
+    {
+        var eventId = Guid.NewGuid();
+        var adminId = Guid.NewGuid();
+
+        _userCtx.GetCurrentUser().Returns(new Administrator { Id = adminId, Firstname = "Test", Lastname = "User", Email = "admin@test.com", Password = "pwd", PhoneNumber = "123", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Stroll } });
+        _events.GetPlayerRegistrationsByEventAsync(eventId).Returns(Task.FromException<IEnumerable<PlayerRegistrationResponse>>(new ArgumentException("Event not found")));
+
+        var result = await _controller.GetPlayerRegistrations(eventId);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(404));
     }
 }
 

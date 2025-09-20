@@ -12,4 +12,13 @@ public class PlayerRegistration
     public Pool Pool { get; set; } = null!;
     public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
     public DateTime? CheckedInAt { get; set; }
+
+    [Required]
+    public PlayerType PlayerType { get; set; } = PlayerType.Player;
+}
+
+public enum PlayerType
+{
+    Player,
+    KeyPlayer
 }

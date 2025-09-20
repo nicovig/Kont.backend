@@ -93,7 +93,7 @@ public class ReferentsService : IReferentsService
 
         return await _context.PlayerRegistration
             .Include(pr => pr.Player)
-            .Where(pr => pr.Pool.Id == poolId && pr.Player.PlayerType == PlayerType.KeyPlayer)
+            .Where(pr => pr.Pool.Id == poolId && pr.PlayerType == PlayerType.KeyPlayer)
             .Select(pr => pr.Player)
             .ToListAsync();
     }

@@ -2,6 +2,7 @@ using Kont.backend.DAL;
 using Kont.backend.DAL.DatabaseContext;
 using Microsoft.EntityFrameworkCore;
 using Kont.backend.Models.Request;
+using Kont.backend.Models.Response;
 using Microsoft.Extensions.Logging;
 
 namespace Kont.backend.Services;
@@ -14,6 +15,7 @@ public interface IEventsService
     Task<Event?> UpdateEventAsync(Guid id, UpdateEventRequest request);
     Task<bool> DeleteEventAsync(Guid id);
     Task<Event?> UpdateEventAllPlayersPresentAsync(Guid eventId, bool isAllPlayersPresent);
+    Task<IEnumerable<PlayerRegistrationResponse>> GetPlayerRegistrationsByEventAsync(Guid eventId);
 }
 
 public class EventsService : IEventsService
@@ -171,6 +173,42 @@ public class EventsService : IEventsService
         eventDb.Pools[0].IsAllPlayersPresent = isAllPlayersPresent;
         await _context.SaveChangesAsync();
         return eventDb;
+    }
+
+    public async Task<IEnumerable<PlayerRegistrationResponse>> GetPlayerRegistrationsByEventAsync(Guid eventId)
+    {
+        var eventEntity = await _context.Event
+            .Include(e => e.Pools)
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+
+        if (eventEntity == null)
+        {
+            throw new ArgumentException("Event not found");
+        }
+
+        var pool = eventEntity.Pools.FirstOrDefault();
+        if (pool == null)
+        {
+            throw new ArgumentException("No pool found for this event");
+        }
+
+        var registrations = await _context.PlayerRegistration
+            .Include(pr => pr.Player)
+            .Where(pr => pr.Pool.Id == pool.Id)
+            .OrderBy(pr => pr.RegisteredAt)
+            .ToListAsync();
+
+        return registrations.Select(pr => new PlayerRegistrationResponse
+        {
+            Id = pr.Id,
+            PlayerFirstname = pr.Player.Firstname,
+            PlayerLastname = pr.Player.Lastname,
+            PlayerEmail = pr.Player.Email,
+            PlayerUsername = pr.Player.Username,
+            PlayerType = pr.PlayerType,
+            RegisteredAt = pr.RegisteredAt,
+            CheckedInAt = pr.CheckedInAt
+        });
     }
 }
 
