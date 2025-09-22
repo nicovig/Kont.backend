@@ -68,6 +68,18 @@ public class GameSessionsControllerTests
         var nf = await _controller.Delete(Guid.NewGuid());
         Assert.That(nf, Is.InstanceOf<NotFoundObjectResult>());
     }
+
+    [Test]
+    public async Task GenerateGroupsWithoutScores_ReturnsOkOrNotFound()
+    {
+        _service.GenerateGroupsWithoutScoresAsync(Arg.Any<Guid>()).Returns(new List<PlayerGroup>());
+        var ok = await _controller.GenerateGroupsWithoutScores(Guid.NewGuid());
+        Assert.That(ok, Is.InstanceOf<ObjectResult>());
+
+        _service.GenerateGroupsWithoutScoresAsync(Arg.Any<Guid>()).Returns((IEnumerable<PlayerGroup>?)null);
+        var nf = await _controller.GenerateGroupsWithoutScores(Guid.NewGuid());
+        Assert.That(nf, Is.InstanceOf<NotFoundObjectResult>());
+    }
 }
 
 

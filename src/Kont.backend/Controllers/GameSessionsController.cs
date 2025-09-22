@@ -54,6 +54,15 @@ public class GameSessionsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id}/generate-groups/no-scores")]
+    [ProducesResponseType(typeof(IEnumerable<PlayerGroup>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GenerateGroupsWithoutScores(Guid id)
+    {
+        var groups = await _service.GenerateGroupsWithoutScoresAsync(id);
+        if (groups == null) return NotFound(new { message = "GameSession not found" });
+        return Ok(groups);
+    }
+
     public record UpdateStartTimeRequest(Guid? Id, DateTime StartedAt);
     [HttpPut("{id}/start-time")]
     [ProducesResponseType(typeof(GameSession), StatusCodes.Status200OK)]

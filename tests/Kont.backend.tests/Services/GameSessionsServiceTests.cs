@@ -27,7 +27,7 @@ public class GameSessionsServiceTests
         _db.Dispose();
     }
 
-    private async Task<(Event ev, Pool pool, Activity act)> SeedEventActivityAsync()
+    private async Task<(Event ev, Pool pool, Activity act)> SeedEventActivityAsync(int players = 0)
     {
         var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
         _db.Site.Add(site);
@@ -35,8 +35,14 @@ public class GameSessionsServiceTests
         _db.Event.Add(ev);
         var pool = new Pool { Id = Guid.NewGuid(), Name = ev.Name, QrCode = ev.EventLink, Event = ev, StartedAt = ev.StartedAt, EndedAt = ev.EndedAt, Status = PoolStatus.Pending, IsActive = true };
         _db.Pool.Add(pool);
-        var act = new Activity { Id = Guid.NewGuid(), Name = "A" };
+        var act = new Activity { Id = Guid.NewGuid(), Name = "A", PlayersPerGroupLimit = 3 };
         _db.Activity.Add(act);
+        for (int i = 0; i < players; i++)
+        {
+            var pr = new PlayerRegistration { Id = Guid.NewGuid(), Player = new Player { Id = Guid.NewGuid(), Firstname = $"P{i}", Lastname = "L", Email = $"p{i}@x.com" }, Pool = pool };
+            _db.PlayerRegistration.Add(pr);
+            pool.PlayerRegistrations.Add(pr);
+        }
         await _db.SaveChangesAsync();
         return (ev, pool, act);
     }
@@ -77,6 +83,18 @@ public class GameSessionsServiceTests
         Assert.That(ok, Is.True);
         var found = await _db.GameSession.FindAsync(created.Id);
         Assert.That(found, Is.Null);
+    }
+
+    [Test]
+    public async Task GenerateGroupsWithoutScores_SplitsByLimit()
+    {
+        var (ev, pool, act) = await SeedEventActivityAsync(players: 8);
+        var gs = await _service.CreateAsync(ev.Id, act.Id);
+        var groups = await _service.GenerateGroupsWithoutScoresAsync(gs!.Id);
+        Assert.That(groups, Is.Not.Null);
+        var list = groups!.ToList();
+        Assert.That(list.Count, Is.EqualTo((int)Math.Ceiling(8.0 / act.PlayersPerGroupLimit)));
+        Assert.That(list.Sum(g => g.Players.Count), Is.EqualTo(8));
     }
 }
 
