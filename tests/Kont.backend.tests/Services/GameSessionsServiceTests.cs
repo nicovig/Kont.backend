@@ -39,7 +39,17 @@ public class GameSessionsServiceTests
         _db.Activity.Add(act);
         for (int i = 0; i < players; i++)
         {
-            var pr = new PlayerRegistration { Id = Guid.NewGuid(), Player = new Player { Id = Guid.NewGuid(), Firstname = $"P{i}", Lastname = "L", Email = $"p{i}@x.com" }, Pool = pool };
+            var player = new Player
+            {
+                Id = Guid.NewGuid(),
+                Firstname = $"P{i}",
+                Lastname = "L",
+                Email = $"p{i}@x.com",
+                Password = "hashed",
+                Username = $"p{i}"
+            };
+            _db.Player.Add(player);
+            var pr = new PlayerRegistration { Id = Guid.NewGuid(), Player = player, Pool = pool };
             _db.PlayerRegistration.Add(pr);
             pool.PlayerRegistrations.Add(pr);
         }

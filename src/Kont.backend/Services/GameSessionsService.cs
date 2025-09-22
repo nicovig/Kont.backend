@@ -24,25 +24,23 @@ public class GameSessionsService : IGameSessionsService
         _context = context;
     }
 
-    public async Task<IEnumerable<GameSession>> GetByEventAsync(Guid eventId)
-    {
-        return await _context.GameSession
+    public async Task<IEnumerable<GameSession>> GetByEventAsync(Guid eventId) => await _context.GameSession
             .Include(gs => gs.Pool)
             .Include(gs => gs.Activity)
             .Where(gs => gs.Pool.Event.Id == eventId)
             .ToListAsync();
-    }
+    
 
     public async Task<GameSession?> CreateAsync(Guid eventId, Guid activityId)
     {
-        var ev = await _context.Event.Include(e => e.Pools).FirstOrDefaultAsync(e => e.Id == eventId);
-        if (ev == null) return null;
-        var pool = ev.Pools.FirstOrDefault();
+        var eventDb = await _context.Event.Include(e => e.Pools).FirstOrDefaultAsync(e => e.Id == eventId);
+        if (eventDb == null) return null;
+        var pool = eventDb.Pools.FirstOrDefault();
         if (pool == null) return null;
         var activity = await _context.Activity.FirstOrDefaultAsync(a => a.Id == activityId);
         if (activity == null) return null;
 
-        var gs = new GameSession
+        var gameSession = new GameSession
         {
             Id = Guid.NewGuid(),
             Pool = pool,
@@ -50,89 +48,110 @@ public class GameSessionsService : IGameSessionsService
             Status = GameSessionStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
-        _context.GameSession.Add(gs);
+        _context.GameSession.Add(gameSession);
         await _context.SaveChangesAsync();
-        return gs;
+        return gameSession;
     }
 
     public async Task<GameSession?> UpdateStatusAsync(Guid id, GameSessionStatus status)
     {
-        var gs = await _context.GameSession.Include(x => x.Pool).Include(x => x.Activity).FirstOrDefaultAsync(x => x.Id == id);
-        if (gs == null) return null;
-        gs.Status = status;
+        var gameSession = await _context.GameSession.Include(x => x.Pool).Include(x => x.Activity).FirstOrDefaultAsync(x => x.Id == id);
+        if (gameSession == null) return null;
+        gameSession.Status = status;
         await _context.SaveChangesAsync();
-        return gs;
+        return gameSession;
     }
 
     public async Task<GameSession?> UpdateStartTimeAsync(Guid id, DateTime startedAt)
     {
-        var gs = await _context.GameSession.Include(x => x.Pool).Include(x => x.Activity).FirstOrDefaultAsync(x => x.Id == id);
-        if (gs == null) return null;
-        gs.StartedAt = startedAt;
+        var gameSession = await _context.GameSession.Include(x => x.Pool).Include(x => x.Activity).FirstOrDefaultAsync(x => x.Id == id);
+        if (gameSession == null) return null;
+        gameSession.StartedAt = startedAt;
         await _context.SaveChangesAsync();
-        return gs;
+        return gameSession;
     }
 
     public async Task<GameSession?> UpdateEndTimeAsync(Guid id, DateTime endedAt)
     {
-        var gs = await _context.GameSession.Include(x => x.Pool).Include(x => x.Activity).FirstOrDefaultAsync(x => x.Id == id);
-        if (gs == null) return null;
-        gs.EndedAt = endedAt;
+        var gameSession = await _context.GameSession.Include(x => x.Pool).Include(x => x.Activity).FirstOrDefaultAsync(x => x.Id == id);
+        if (gameSession == null) return null;
+        gameSession.EndedAt = endedAt;
         await _context.SaveChangesAsync();
-        return gs;
+        return gameSession;
     }
 
     public async Task<bool> DeleteAsync(Guid id)
     {
-        var gs = await _context.GameSession.FindAsync(id);
-        if (gs == null) return false;
-        _context.GameSession.Remove(gs);
+        var gameSession = await _context.GameSession.FindAsync(id);
+        if (gameSession == null) return false;
+        _context.GameSession.Remove(gameSession);
         await _context.SaveChangesAsync();
         return true;
     }
 
     public async Task<IEnumerable<PlayerGroup>?> GenerateGroupsWithoutScoresAsync(Guid gameSessionId)
     {
-        var gs = await _context.GameSession
+        var gameSession = await LoadGameSessionGraphAsync(gameSessionId);
+        if (gameSession == null) return null;
+        var limit = gameSession.Activity.PlayersPerGroupLimit;
+        if (limit <= 0) return Array.Empty<PlayerGroup>();
+        await ResetExistingGroupsAsync(gameSession);
+        var regs = GetOrderedUniqueRegistrations(gameSession);
+        var groups = BuildGroups(gameSession, regs, limit);
+        _context.PlayerGroup.AddRange(groups);
+        await _context.SaveChangesAsync();
+        return groups;
+    }
+
+
+
+
+    private async Task ResetExistingGroupsAsync(GameSession gameSession)
+    {
+        if (!gameSession.PlayerGroups.Any()) return;
+        _context.PlayerGroup.RemoveRange(gameSession.PlayerGroups);
+        await _context.SaveChangesAsync();
+        _context.Entry(gameSession).Collection(g => g.PlayerGroups).Load();
+    }    
+
+    private List<PlayerGroup> BuildGroups(GameSession gameSession, List<PlayerRegistration> playerRegistrations, int limit)
+    {
+        var groups = new List<PlayerGroup>();
+        var index = 0;
+        var groupNumber = 1;
+        while (index < playerRegistrations.Count)
+        {
+            var take = Math.Min(limit, playerRegistrations.Count - index);
+            var slice = playerRegistrations.GetRange(index, take);
+            var playerGroup = new PlayerGroup
+            {
+                Id = Guid.NewGuid(),
+                GameSession = gameSession,
+                Players = slice,
+                GroupNumber = groupNumber,
+                CreatedAt = DateTime.UtcNow
+            };
+            groups.Add(playerGroup);
+            index += take;
+            groupNumber += 1;
+        }
+        return groups;
+    }
+    
+    private async Task<GameSession?> LoadGameSessionGraphAsync(Guid gameSessionId) => await _context.GameSession
             .Include(x => x.Activity)
             .Include(x => x.Pool)
                 .ThenInclude(p => p.PlayerRegistrations)
             .Include(x => x.PlayerGroups)
                 .ThenInclude(pg => pg.Players)
             .FirstOrDefaultAsync(x => x.Id == gameSessionId);
-        if (gs == null) return null;
-        var limit = gs.Activity.PlayersPerGroupLimit;
-        if (limit <= 0) return Array.Empty<PlayerGroup>();
-        if (gs.PlayerGroups.Any())
-        {
-            _context.PlayerGroup.RemoveRange(gs.PlayerGroups);
-            await _context.SaveChangesAsync();
-            _context.Entry(gs).Collection(g => g.PlayerGroups).Load();
-        }
-        var regs = gs.Pool.PlayerRegistrations.ToList();
-        var groups = new List<PlayerGroup>();
-        var index = 0;
-        var groupNumber = 1;
-        while (index < regs.Count)
-        {
-            var take = Math.Min(limit, regs.Count - index);
-            var slice = regs.GetRange(index, take);
-            var pg = new PlayerGroup
-            {
-                Id = Guid.NewGuid(),
-                GameSession = gs,
-                Players = slice,
-                GroupNumber = groupNumber,
-                CreatedAt = DateTime.UtcNow
-            };
-            groups.Add(pg);
-            index += take;
-            groupNumber += 1;
-        }
-        _context.PlayerGroup.AddRange(groups);
-        await _context.SaveChangesAsync();
-        return groups;
-    }
+
+    private List<PlayerRegistration> GetOrderedUniqueRegistrations(GameSession gameSession) => gameSession.Pool.PlayerRegistrations
+            .GroupBy(r => r.Id)
+            .Select(g => g.First())
+            .OrderBy(r => r.RegisteredAt)
+            .ThenBy(r => r.Id)
+            .ToList();
 }
 
 
