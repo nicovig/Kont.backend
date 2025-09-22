@@ -103,6 +103,7 @@ public class ActivitiesService : IActivitiesService
 
         existingActivity.Name = updateActivityRequest.Name;
         existingActivity.Description = updateActivityRequest.Description;
+        existingActivity.PlayersPerGroupLimit = updateActivityRequest.PlayersPerGroupLimit;
         if (updateActivityRequest.Site != null)
         {
             var siteId = updateActivityRequest.Site.Id;

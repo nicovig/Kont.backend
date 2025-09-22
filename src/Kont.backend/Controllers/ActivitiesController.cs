@@ -134,6 +134,7 @@ public class ActivitiesController : ControllerBase
                     HigherIsBetter = sm.HigherIsBetter,
                     Coefficient = sm.Coefficient
                 }).ToList(),
+                PlayersPerGroupLimit = createActivityRequest.PlayersPerGroupLimit,
                 CreatedBy = currentUser,
                 CreatedAt = DateTime.UtcNow
             };

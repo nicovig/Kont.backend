@@ -20,6 +20,9 @@ public class Activity
     public Site Site { get; set; } = null!;
 
     [Required]
+    public int PlayersPerGroupLimit { get; set; } = 0;
+
+    [Required]
     public List<ScoringMetric> ScoringMetrics { get; set; } = new List<ScoringMetric>();
 
     [Required]

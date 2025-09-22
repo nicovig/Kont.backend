@@ -109,6 +109,7 @@ public class ActivitiesControllerTests
             Id = Guid.NewGuid(),
             Name = request.Name,
             Description = request.Description,
+            PlayersPerGroupLimit = 4,
             Site = site,
             ScoringMetrics = new List<ScoringMetric>
             {

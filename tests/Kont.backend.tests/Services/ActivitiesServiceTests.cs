@@ -68,6 +68,7 @@ public class ActivitiesServiceTests
             Name = "Karting",
             Description = "GP",
             Site = site,
+            PlayersPerGroupLimit = 4,
             ScoringMetrics = new List<ScoringMetric>
             {
                 new() { Name = "Time", Unit = "s", HigherIsBetter = false, Coefficient = 0.7 },
@@ -118,6 +119,7 @@ public class ActivitiesServiceTests
             Name = "Karting",
             Description = "GP",
             Site = site,
+            PlayersPerGroupLimit = 4,
             ScoringMetrics = new List<ScoringMetric>
             {
                 new() { Name = "Time", Unit = "s", HigherIsBetter = false, Coefficient = 0.4 },

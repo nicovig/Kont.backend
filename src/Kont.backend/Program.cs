@@ -49,7 +49,8 @@ builder.Services
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
 
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
+    })
+    .AddRazorRuntimeCompilation();
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -125,10 +126,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Add Razor view engine for email templates
-builder.Services.AddMvc().AddRazorRuntimeCompilation();
-builder.Services.AddScoped<ICompositeViewEngine, CompositeViewEngine>();
-builder.Services.AddScoped<ITempDataProvider, SessionStateTempDataProvider>();
+// Razor view engine for email templates is configured via AddControllersWithViews().AddRazorRuntimeCompilation()
 
 var app = builder.Build();
 

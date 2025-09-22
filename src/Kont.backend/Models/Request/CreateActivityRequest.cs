@@ -16,6 +16,9 @@ public class CreateActivityRequest
     
     public required Site Site { get; set; } = null!;
 
+    [Required]
+    public int PlayersPerGroupLimit { get; set; } = 0;
+
     [MinLength(1)]
     public required List<CreateScoringMetricRequest> ScoringMetrics { get; set; } = new List<CreateScoringMetricRequest>();
 }
