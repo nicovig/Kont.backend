@@ -58,9 +58,32 @@ public class GameSessionsController : ControllerBase
     [ProducesResponseType(typeof(IEnumerable<PlayerGroup>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GenerateGroupsWithoutScores(Guid id)
     {
-        var groups = await _service.GenerateGroupsWithoutScoresAsync(id);
-        if (groups == null) return NotFound(new { message = "GameSession not found" });
-        return Ok(groups);
+        try
+        {
+            var groups = await _service.GenerateGroupsWithoutScoresAsync(id);
+            if (groups == null) return NotFound(new { message = "GameSession not found" });
+            return Ok(groups);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id}/generate-groups/with-scores")]
+    [ProducesResponseType(typeof(IEnumerable<PlayerGroup>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GenerateGroupsWithScores(Guid id)
+    {
+        try
+        {
+            var groups = await _service.GenerateGroupsWithScoresAsync(id);
+            if (groups == null) return NotFound(new { message = "GameSession not found" });
+            return Ok(groups);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     public record UpdateStartTimeRequest(Guid? Id, DateTime StartedAt);

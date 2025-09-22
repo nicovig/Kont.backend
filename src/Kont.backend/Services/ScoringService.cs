@@ -190,18 +190,4 @@ public class ScoringService : IScoringService
 
         return summaries;
     }
-
-    public double NormalizeScore(double value, ScoringMetric metric)
-    {
-        if (metric.HigherIsBetter)
-        {
-            return value;
-        }
-        else
-        {
-            // Pour les métriques où "moins c'est mieux" (temps, position, etc.)
-            // On inverse en soustrayant d'une valeur de référence
-            return 1000 - value;
-        }
-    }
 }

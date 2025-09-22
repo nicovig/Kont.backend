@@ -17,41 +17,7 @@ public class ScoringServiceTests
         _scoringService = new ScoringService(null!);
     }
 
-    [Test]
-    public void NormalizeScore_HigherIsBetter_ReturnsOriginalValue()
-    {
-        // Arrange
-        var metric = new ScoringMetric
-        {
-            HigherIsBetter = true,
-            Coefficient = 1.0
-        };
-        var value = 150.0;
-
-        // Act
-        var result = _scoringService.NormalizeScore(value, metric);
-
-        // Assert
-        Assert.That(result, Is.EqualTo(150.0));
-    }
-
-    [Test]
-    public void NormalizeScore_LowerIsBetter_ReturnsInvertedValue()
-    {
-        // Arrange
-        var metric = new ScoringMetric
-        {
-            HigherIsBetter = false,
-            Coefficient = 1.0
-        };
-        var value = 50.0;
-
-        // Act
-        var result = _scoringService.NormalizeScore(value, metric);
-
-        // Assert
-        Assert.That(result, Is.EqualTo(950.0)); // 1000 - 50
-    }
+    
 
     [Test]
     public void CalculatePercentageScore_WithValidScores_ReturnsCorrectPercentage()

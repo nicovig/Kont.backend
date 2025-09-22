@@ -13,15 +13,18 @@ public interface IGameSessionsService
     Task<GameSession?> UpdateEndTimeAsync(Guid id, DateTime endedAt);
     Task<bool> DeleteAsync(Guid id);
     Task<IEnumerable<PlayerGroup>?> GenerateGroupsWithoutScoresAsync(Guid gameSessionId);
+    Task<IEnumerable<PlayerGroup>?> GenerateGroupsWithScoresAsync(Guid gameSessionId);
 }
 
 public class GameSessionsService : IGameSessionsService
 {
     private readonly IDatabaseContext _context;
+    private readonly IScoringService _scoringService;
 
-    public GameSessionsService(IDatabaseContext context)
+    public GameSessionsService(IDatabaseContext context, IScoringService scoringService)
     {
         _context = context;
+        _scoringService = scoringService;
     }
 
     public async Task<IEnumerable<GameSession>> GetByEventAsync(Guid eventId) => await _context.GameSession
@@ -93,9 +96,14 @@ public class GameSessionsService : IGameSessionsService
     {
         var gameSession = await LoadGameSessionGraphAsync(gameSessionId);
         if (gameSession == null) return null;
+        if (gameSession.Status != GameSessionStatus.Pending) throw new InvalidOperationException("GameSession must be Pending");
+        if (gameSession.Pool.Status != PoolStatus.Active) throw new InvalidOperationException("Pool must be Active");
+        var otherSessions = await _context.GameSession.Where(gs => gs.Pool.Id == gameSession.Pool.Id && gs.Id != gameSession.Id).ToListAsync();
+        var isFirst = !otherSessions.Any();
+        var othersClosed = otherSessions.All(s => s.Status == GameSessionStatus.Completed || s.Status == GameSessionStatus.Cancelled);
+        if (!isFirst && !othersClosed) throw new InvalidOperationException("Other sessions must be Completed or Cancelled");
         var limit = gameSession.Activity.PlayersPerGroupLimit;
         if (limit <= 0) return Array.Empty<PlayerGroup>();
-        await ResetExistingGroupsAsync(gameSession);
         var regs = GetOrderedUniqueRegistrations(gameSession);
         var groups = BuildGroups(gameSession, regs, limit);
         _context.PlayerGroup.AddRange(groups);
@@ -106,13 +114,6 @@ public class GameSessionsService : IGameSessionsService
 
 
 
-    private async Task ResetExistingGroupsAsync(GameSession gameSession)
-    {
-        if (!gameSession.PlayerGroups.Any()) return;
-        _context.PlayerGroup.RemoveRange(gameSession.PlayerGroups);
-        await _context.SaveChangesAsync();
-        _context.Entry(gameSession).Collection(g => g.PlayerGroups).Load();
-    }    
 
     private List<PlayerGroup> BuildGroups(GameSession gameSession, List<PlayerRegistration> playerRegistrations, int limit)
     {
@@ -135,6 +136,38 @@ public class GameSessionsService : IGameSessionsService
             index += take;
             groupNumber += 1;
         }
+        return groups;
+    }
+    
+    public async Task<IEnumerable<PlayerGroup>?> GenerateGroupsWithScoresAsync(Guid gameSessionId)
+    {
+        var gameSession = await LoadGameSessionGraphAsync(gameSessionId);
+        if (gameSession == null) return null;
+        if (gameSession.Status != GameSessionStatus.Pending) throw new InvalidOperationException("GameSession must be Pending");
+        if (gameSession.Pool.Status != PoolStatus.Active) throw new InvalidOperationException("Pool must be Active");
+        var otherSessions = await _context.GameSession.Where(gs => gs.Pool.Id == gameSession.Pool.Id && gs.Id != gameSession.Id && gs.Activity.Id == gameSession.Activity.Id).ToListAsync();
+        if (!otherSessions.Any()) throw new InvalidOperationException("No previous sessions to base scores on");
+        var othersClosed = otherSessions.All(s => s.Status == GameSessionStatus.Completed || s.Status == GameSessionStatus.Cancelled);
+        if (!othersClosed) throw new InvalidOperationException("Other sessions must be Completed or Cancelled");
+
+        var limit = gameSession.Activity.PlayersPerGroupLimit;
+        if (limit <= 0) return Array.Empty<PlayerGroup>();
+
+        var regs = GetOrderedUniqueRegistrations(gameSession);
+
+        var rankings = await _scoringService.GetActivityRankingsAsync(gameSession.Pool.Id, gameSession.Activity.Id);
+        if (!rankings.Any()) throw new InvalidOperationException("No scores found for activity in pool");
+
+        var playerIdToPercentage = rankings.ToDictionary(r => r.PlayerId, r => r.GlobalPercentage);
+
+        var ordered = regs
+            .OrderByDescending(r => playerIdToPercentage.GetValueOrDefault(r.Player.Id, 0))
+            .ThenBy(r => r.Player.Username)
+            .ToList();
+
+        var groups = BuildGroups(gameSession, ordered, limit);
+        _context.PlayerGroup.AddRange(groups);
+        await _context.SaveChangesAsync();
         return groups;
     }
     

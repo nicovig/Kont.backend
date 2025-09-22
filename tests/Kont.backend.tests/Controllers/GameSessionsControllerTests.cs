@@ -80,6 +80,22 @@ public class GameSessionsControllerTests
         var nf = await _controller.GenerateGroupsWithoutScores(Guid.NewGuid());
         Assert.That(nf, Is.InstanceOf<NotFoundObjectResult>());
     }
+
+    [Test]
+    public async Task GenerateGroupsWithScores_ReturnsOkOrBadRequestOrNotFound()
+    {
+        _service.GenerateGroupsWithScoresAsync(Arg.Any<Guid>()).Returns(new List<PlayerGroup>());
+        var ok = await _controller.GenerateGroupsWithScores(Guid.NewGuid());
+        Assert.That(ok, Is.InstanceOf<ObjectResult>());
+
+        _service.GenerateGroupsWithScoresAsync(Arg.Any<Guid>()).Returns((IEnumerable<PlayerGroup>?)null);
+        var nf = await _controller.GenerateGroupsWithScores(Guid.NewGuid());
+        Assert.That(nf, Is.InstanceOf<NotFoundObjectResult>());
+
+        _service.GenerateGroupsWithScoresAsync(Arg.Any<Guid>()).Returns<Task<IEnumerable<PlayerGroup>>?>(_ => throw new InvalidOperationException("e"));
+        var br = await _controller.GenerateGroupsWithScores(Guid.NewGuid());
+        Assert.That(br, Is.InstanceOf<BadRequestObjectResult>());
+    }
 }
 
 

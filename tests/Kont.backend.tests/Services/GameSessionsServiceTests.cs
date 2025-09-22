@@ -1,6 +1,8 @@
 using Kont.backend.DAL;
 using Kont.backend.DAL.DatabaseContext;
 using Kont.backend.Services;
+using NSubstitute;
+using Kont.backend.Models.Scoring;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kont.backend.tests.Services;
@@ -9,6 +11,7 @@ public class GameSessionsServiceTests
 {
     private DatabaseContext _db = null!;
     private IGameSessionsService _service = null!;
+    private IScoringService _scoring = null!;
 
     [SetUp]
     public void Setup()
@@ -18,7 +21,8 @@ public class GameSessionsServiceTests
             .Options;
         var appSettings = Microsoft.Extensions.Options.Options.Create(new Kont.backend.Models.AppSettings());
         _db = new DatabaseContext(options, appSettings);
-        _service = new GameSessionsService(_db);
+        _scoring = Substitute.For<IScoringService>();
+        _service = new GameSessionsService(_db, _scoring);
     }
 
     [TearDown]
@@ -100,11 +104,95 @@ public class GameSessionsServiceTests
     {
         var (ev, pool, act) = await SeedEventActivityAsync(players: 8);
         var gs = await _service.CreateAsync(ev.Id, act.Id);
+        pool.Status = PoolStatus.Active;
+        await _db.SaveChangesAsync();
         var groups = await _service.GenerateGroupsWithoutScoresAsync(gs!.Id);
         Assert.That(groups, Is.Not.Null);
         var list = groups!.ToList();
         Assert.That(list.Count, Is.EqualTo((int)Math.Ceiling(8.0 / act.PlayersPerGroupLimit)));
         Assert.That(list.Sum(g => g.Players.Count), Is.EqualTo(8));
+    }
+
+    [Test]
+    public async Task GenerateGroupsWithoutScores_ThrowsIfSessionNotPending()
+    {
+        var (ev, pool, act) = await SeedEventActivityAsync(players: 2);
+        var gs = await _service.CreateAsync(ev.Id, act.Id);
+        pool.Status = PoolStatus.Active;
+        gs!.Status = GameSessionStatus.Active;
+        await _db.SaveChangesAsync();
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await _service.GenerateGroupsWithoutScoresAsync(gs.Id));
+    }
+
+    [Test]
+    public async Task GenerateGroupsWithoutScores_ThrowsIfPoolNotActive()
+    {
+        var (ev, pool, act) = await SeedEventActivityAsync(players: 2);
+        var gs = await _service.CreateAsync(ev.Id, act.Id);
+        pool.Status = PoolStatus.Pending;
+        await _db.SaveChangesAsync();
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await _service.GenerateGroupsWithoutScoresAsync(gs!.Id));
+    }
+
+    [Test]
+    public async Task GenerateGroupsWithoutScores_ThrowsIfOtherSessionsNotClosed()
+    {
+        var (ev, pool, act) = await SeedEventActivityAsync(players: 2);
+        pool.Status = PoolStatus.Active;
+        var gs1 = await _service.CreateAsync(ev.Id, act.Id);
+        var gs2 = await _service.CreateAsync(ev.Id, act.Id);
+        await _db.SaveChangesAsync();
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await _service.GenerateGroupsWithoutScoresAsync(gs2!.Id));
+        gs1!.Status = GameSessionStatus.Completed;
+        await _db.SaveChangesAsync();
+        var ok = await _service.GenerateGroupsWithoutScoresAsync(gs2!.Id);
+        Assert.That(ok, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task GenerateGroupsWithScores_OrdersByPercentage()
+    {
+        var (ev, pool, act) = await SeedEventActivityAsync(players: 5);
+        pool.Status = PoolStatus.Active;
+        var gs1 = await _service.CreateAsync(ev.Id, act.Id);
+        gs1!.Status = GameSessionStatus.Completed;
+        await _db.SaveChangesAsync();
+
+        // Seed PlayerActivityScore with percentages: p0=100, p1=80, p2=60, p3=40, p4=20
+        var regs = pool.PlayerRegistrations.ToList();
+        for (int i = 0; i < regs.Count; i++)
+        {
+            _db.PlayerActivityScore.Add(new PlayerActivityScore
+            {
+                PlayerEntity = regs[i].Player,
+                ActivityEntity = act,
+                PoolEntity = pool,
+                TotalScore = 100 - i * 10,
+                Percentage = 100 - i * 20,
+                Rank = i + 1
+            });
+        }
+        await _db.SaveChangesAsync();
+
+        var gs2 = await _service.CreateAsync(ev.Id, act.Id);
+        // Mock scoring rankings descending by our seeded order
+        var rankings = regs.Select((r, idx) => new Kont.backend.Models.Scoring.PlayerRanking
+        {
+            PlayerId = r.Player.Id,
+            PlayerName = r.Player.Firstname,
+            Username = r.Player.Username,
+            GlobalScore = 100 - idx * 10,
+            GlobalPercentage = 100 - idx * 20,
+            GlobalRank = idx + 1
+        }).ToList();
+        _scoring.GetActivityRankingsAsync(pool.Id, act.Id).Returns(Task.FromResult(rankings));
+        var groups = await _service.GenerateGroupsWithScoresAsync(gs2!.Id);
+        Assert.That(groups, Is.Not.Null);
+        var list = groups!.ToList();
+        // First group should contain the highest percentage players
+        var firstGroup = list.First();
+        var topUsernames = firstGroup.Players.Select(p => p.Player.Username).ToList();
+        CollectionAssert.Contains(topUsernames, regs[0].Player.Username);
     }
 }
 
