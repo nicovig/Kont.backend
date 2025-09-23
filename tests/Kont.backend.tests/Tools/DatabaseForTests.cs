@@ -5,14 +5,15 @@ namespace Kont.backend.tests.Tools;
 
 public static class Administrators
 {
-    internal static TestUser First { get; } = new() { Id = Guid.Parse("00000000-0000-0000-0024-000000000000"), Email = "first@kont.fr" };
-    internal static TestUser Second { get; } = new() { Id = Guid.Parse("00000000-0000-0000-0012-000000000000"), Email = "second@kont.fr" };
+    internal static TestUser First { get; } = new() { Id = Guid.Parse("00000000-0000-0000-0024-000000000000"), Email = "first@kont.fr", Firstname = "John" };
+    internal static TestUser Second { get; } = new() { Id = Guid.Parse("00000000-0000-0000-0012-000000000000"), Email = "second@kont.fr", Firstname = "Alice" };
 }
 
 public class TestUser
 {
     public Guid Id { get; set; }
     public required string Email { get; set; }
+    public string Firstname { get; set; }
 }
 
 public class DatabaseForTests
@@ -27,8 +28,12 @@ public class DatabaseForTests
                                     .Select(e => new Administrator
                                     {
                                         Id = e.Id,
+                                        Firstname = e.Firstname,
+                                        Lastname = "Doe",
                                         Email = e.Email,
+                                        Password = "password01",
                                         IsActive = true,
+                                        PhoneNumber = "0123456789",
                                         Role = new Role { Id = new Guid(), CreatedAt = new DateTime(), RoleType = RoleType.Admin },
                                         Subscription = new Subscription { Id = new Guid(), ExpiresAt = new DateTime().AddDays(365), PaidAt = new DateTime(), SubscriptionType = SubscriptionType.Klasel }
                                     } ));

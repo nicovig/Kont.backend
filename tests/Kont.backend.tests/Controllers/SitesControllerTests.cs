@@ -43,7 +43,10 @@ public class SitesControllerTests
 
         var result = await _controller.CreateSite(site);
 
-        Assert.That(result, Is.InstanceOf<CreatedAtActionResult>());
+        var createdAtResult = result as CreatedAtActionResult;
+        Assert.That(createdAtResult, Is.Not.Null);
+        Assert.That(createdAtResult!.StatusCode, Is.EqualTo(201));
+        Assert.That(createdAtResult.Value, Is.EqualTo(site));
     }
 
     [Test]
@@ -64,6 +67,32 @@ public class SitesControllerTests
         var result = await _controller.DeleteSite(Guid.NewGuid());
 
         Assert.That(result, Is.InstanceOf<NoContentResult>());
+    }
+
+    [Test]
+    public async Task GetSite_NotFound_Returns404()
+    {
+        _sitesService.GetSiteAsync(Arg.Any<Guid>()).Returns((Site?)null);
+
+        var result = await _controller.GetSite(Guid.NewGuid());
+
+        var notFoundResult = result as NotFoundObjectResult;
+        Assert.That(notFoundResult, Is.Not.Null);
+        Assert.That(notFoundResult!.StatusCode, Is.EqualTo(404));
+    }
+
+    [Test]
+    public async Task UpdateSite_Success_ReturnsOk()
+    {
+        var site = new Site { Id = Guid.NewGuid(), Name = "Updated Site" };
+        _sitesService.UpdateSiteAsync(Arg.Any<Guid>(), Arg.Any<Site>()).Returns(site);
+
+        var result = await _controller.UpdateSite(Guid.NewGuid(), site);
+
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        Assert.That(okResult!.StatusCode, Is.EqualTo(200));
+        Assert.That(okResult.Value, Is.EqualTo(site));
     }
 }
 

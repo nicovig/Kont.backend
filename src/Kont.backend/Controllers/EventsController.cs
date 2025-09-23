@@ -144,6 +144,19 @@ public class EventsController : ControllerBase
             return StatusCode(500, new { message = "Internal server error" });
         }
     }
+
+    [HttpPut("{id}/players/{playerRegistrationId}/present")]
+    [ProducesResponseType(typeof(Event), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdatePlayerIsPresent(Guid id, Guid playerRegistrationId, [FromQuery] bool isPresent)
+    {
+        var currentUser = _userContextService.GetCurrentUser();
+        if (currentUser == null) return Unauthorized(new { message = "User not authenticated" });
+
+        var ev = await _eventsService.UpdateEventPlayerIsPresentAsync(id, playerRegistrationId, isPresent);
+        if (ev == null) return NotFound(new { message = "Event or player not found" });
+        return Ok(ev);
+    }
 }
 
 

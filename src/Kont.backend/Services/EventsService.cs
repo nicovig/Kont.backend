@@ -15,6 +15,7 @@ public interface IEventsService
     Task<Event?> UpdateEventAsync(Guid id, UpdateEventRequest request);
     Task<bool> DeleteEventAsync(Guid id);
     Task<Event?> UpdateEventAllPlayersPresentAsync(Guid eventId, bool isAllPlayersPresent);
+    Task<Event?> UpdateEventPlayerIsPresentAsync(Guid eventId, Guid playerRegistrationId, bool isPresent);    
     Task<IEnumerable<PlayerRegistrationResponse>> GetPlayerRegistrationsByEventAsync(Guid eventId);
 }
 
@@ -167,10 +168,42 @@ public class EventsService : IEventsService
 
     public async Task<Event?> UpdateEventAllPlayersPresentAsync(Guid eventId, bool isAllPlayersPresent)
     {
-        var eventDb = await _context.Event.Include(e => e.Pools).FirstOrDefaultAsync(e => e.Id == eventId);
+        var eventDb = await _context.Event.Include(e => e.Pools).ThenInclude(p => p.PlayerRegistrations).FirstOrDefaultAsync(e => e.Id == eventId);
         if (eventDb == null) return null;
         if (eventDb.Pools.Count == 0) return null;
+        if (eventDb.Pools[0].PlayerRegistrations.Count == 0) return null;
         eventDb.Pools[0].IsAllPlayersPresent = isAllPlayersPresent;
+        if (isAllPlayersPresent)
+        {
+            var now = DateTime.UtcNow;
+            foreach (var pr in eventDb.Pools[0].PlayerRegistrations)
+            {
+                if (!pr.CheckedInAt.HasValue)
+                {
+                    pr.CheckedInAt = now;
+                }
+            }
+        }
+        else
+        {
+            foreach (var pr in eventDb.Pools[0].PlayerRegistrations)
+            {
+                pr.CheckedInAt = null;
+            }
+        }
+        await _context.SaveChangesAsync();
+        return eventDb;
+    }
+
+    public async Task<Event?> UpdateEventPlayerIsPresentAsync(Guid eventId, Guid playerRegistrationId, bool isPresent)
+    {
+        var eventDb = await _context.Event.Include(e => e.Pools).ThenInclude(p => p.PlayerRegistrations).FirstOrDefaultAsync(e => e.Id == eventId);
+        if (eventDb == null) return null;
+        if (eventDb.Pools.Count == 0) return null;
+        if (eventDb.Pools[0].PlayerRegistrations.Count == 0) return null;
+        var playerRegistration = eventDb.Pools[0].PlayerRegistrations.FirstOrDefault(pr => pr.Id == playerRegistrationId);
+        if (playerRegistration == null) return null;
+        playerRegistration.CheckedInAt = isPresent ? DateTime.UtcNow : null;       
         await _context.SaveChangesAsync();
         return eventDb;
     }

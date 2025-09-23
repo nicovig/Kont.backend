@@ -58,8 +58,40 @@ public class GameSessionsService : IGameSessionsService
 
     public async Task<GameSession?> UpdateStatusAsync(Guid id, GameSessionStatus status)
     {
-        var gameSession = await _context.GameSession.Include(x => x.Pool).Include(x => x.Activity).FirstOrDefaultAsync(x => x.Id == id);
+        var gameSession = await _context.GameSession
+            .Include(x => x.Pool)
+                .ThenInclude(p => p.Event)
+            .Include(x => x.Activity)
+            .FirstOrDefaultAsync(x => x.Id == id);
         if (gameSession == null) return null;
+        if (gameSession.Pool.Status == PoolStatus.Cancelled || gameSession.Pool.Status == PoolStatus.Completed)
+            throw new InvalidOperationException("Pool is not editable");
+        if (gameSession.Pool.Event.Status == EventStatus.Cancelled || gameSession.Pool.Event.Status == EventStatus.Completed)
+            throw new InvalidOperationException("Event is not editable");
+
+        if (status == GameSessionStatus.Active)
+        {
+            if (gameSession.Status != GameSessionStatus.Pending)
+                throw new InvalidOperationException("Only Pending session can start");
+            var siblings = await _context.GameSession
+                .Where(gs => gs.Pool.Id == gameSession.Pool.Id)
+                .OrderBy(gs => gs.StartedAt ?? DateTime.MaxValue)
+                .ThenBy(gs => gs.CreatedAt)
+                .ToListAsync();
+            var index = siblings.FindIndex(s => s.Id == id);
+            if (index > 0)
+            {
+                var prev = siblings[index - 1];
+                if (prev.Status != GameSessionStatus.Completed && prev.Status != GameSessionStatus.Cancelled)
+                    throw new InvalidOperationException("Previous session must be Completed or Cancelled");
+            }
+        }
+
+        if (status == GameSessionStatus.Completed)
+        {
+            if (gameSession.Status != GameSessionStatus.Active)
+                throw new InvalidOperationException("Only Active session can complete");
+        }
         gameSession.Status = status;
         await _context.SaveChangesAsync();
         return gameSession;
@@ -67,8 +99,16 @@ public class GameSessionsService : IGameSessionsService
 
     public async Task<GameSession?> UpdateStartTimeAsync(Guid id, DateTime startedAt)
     {
-        var gameSession = await _context.GameSession.Include(x => x.Pool).Include(x => x.Activity).FirstOrDefaultAsync(x => x.Id == id);
+        var gameSession = await _context.GameSession
+            .Include(x => x.Pool)
+                .ThenInclude(p => p.Event)
+            .Include(x => x.Activity)
+            .FirstOrDefaultAsync(x => x.Id == id);
         if (gameSession == null) return null;
+        if (gameSession.Pool.Status == PoolStatus.Cancelled || gameSession.Pool.Status == PoolStatus.Completed)
+            throw new InvalidOperationException("Pool is not editable");
+        if (gameSession.Pool.Event.Status == EventStatus.Cancelled || gameSession.Pool.Event.Status == EventStatus.Completed)
+            throw new InvalidOperationException("Event is not editable");
         gameSession.StartedAt = startedAt;
         await _context.SaveChangesAsync();
         return gameSession;
@@ -76,8 +116,18 @@ public class GameSessionsService : IGameSessionsService
 
     public async Task<GameSession?> UpdateEndTimeAsync(Guid id, DateTime endedAt)
     {
-        var gameSession = await _context.GameSession.Include(x => x.Pool).Include(x => x.Activity).FirstOrDefaultAsync(x => x.Id == id);
+        var gameSession = await _context.GameSession
+            .Include(x => x.Pool)
+                .ThenInclude(p => p.Event)
+            .Include(x => x.Activity)
+            .FirstOrDefaultAsync(x => x.Id == id);
         if (gameSession == null) return null;
+        if (gameSession.Pool.Status == PoolStatus.Cancelled || gameSession.Pool.Status == PoolStatus.Completed)
+            throw new InvalidOperationException("Pool is not editable");
+        if (gameSession.Pool.Event.Status == EventStatus.Cancelled || gameSession.Pool.Event.Status == EventStatus.Completed)
+            throw new InvalidOperationException("Event is not editable");
+        if (gameSession.StartedAt.HasValue && endedAt < gameSession.StartedAt.Value)
+            throw new InvalidOperationException("End time cannot be before start time");
         gameSession.EndedAt = endedAt;
         await _context.SaveChangesAsync();
         return gameSession;
@@ -98,6 +148,8 @@ public class GameSessionsService : IGameSessionsService
         if (gameSession == null) return null;
         if (gameSession.Status != GameSessionStatus.Pending) throw new InvalidOperationException("GameSession must be Pending");
         if (gameSession.Pool.Status != PoolStatus.Active) throw new InvalidOperationException("Pool must be Active");
+        var anyActive = await _context.GameSession.AnyAsync(gs => gs.Pool.Id == gameSession.Pool.Id && gs.Status == GameSessionStatus.Active);
+        if (anyActive) throw new InvalidOperationException("Another GameSession is currently Active");
         var otherSessions = await _context.GameSession.Where(gs => gs.Pool.Id == gameSession.Pool.Id && gs.Id != gameSession.Id).ToListAsync();
         var isFirst = !otherSessions.Any();
         var othersClosed = otherSessions.All(s => s.Status == GameSessionStatus.Completed || s.Status == GameSessionStatus.Cancelled);

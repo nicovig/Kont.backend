@@ -22,6 +22,25 @@ public class EventsServiceTests
         _service = new EventsService(_db);
     }
 
+        private async Task<(Event ev, Pool pool, Player player)> SeedAsync()
+    {
+        var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "Z", Country = "FR", State = "ST", PhoneNumber = "0123456789", Email = "s@s.com" };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "Adm", Lastname = "In", Email = "adm@test.com", Password = "p", PhoneNumber = "0", Role = new Role { RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { SubscriptionType = SubscriptionType.Stroll } };
+        await _db.Administrator.AddAsync(admin);
+        await _db.SaveChangesAsync();
+        var ev = new Event { Id = Guid.NewGuid(), Name = "E", EventLink = "L", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddDays(1), Site = site, Status = EventStatus.Pending, CreatedBy = admin };
+        var pool = new Pool { Id = Guid.NewGuid(), Name = "P", QrCode = "Q", Event = ev, Status = PoolStatus.Pending, IsActive = true };
+        var player = new Player { Id = Guid.NewGuid(), Firstname = "A", Lastname = "B", Email = "p@p.com", Password = "x", Username = "ab" };
+        var reg = new PlayerRegistration { Id = Guid.NewGuid(), Player = player, Pool = pool, RegisteredAt = DateTime.UtcNow };
+        await _db.Site.AddAsync(site);
+        await _db.Event.AddAsync(ev);
+        await _db.Pool.AddAsync(pool);
+        await _db.Player.AddAsync(player);
+        await _db.PlayerRegistration.AddAsync(reg);
+        await _db.SaveChangesAsync();
+        return (ev, pool, player);
+    }
+
     [TearDown]
     public void TearDown()
     {
@@ -32,7 +51,7 @@ public class EventsServiceTests
     public async Task CreateEvent_CreatesEventAndPool()
     {
         var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
-        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { Id = Guid.NewGuid(), SubscriptionType = SubscriptionType.Stroll } };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { SubscriptionType = SubscriptionType.Stroll } };
         _db.Site.Add(site);
         _db.Administrator.Add(admin);
         await _db.SaveChangesAsync();
@@ -128,6 +147,13 @@ public class EventsServiceTests
 
         var created = await _service.CreateEventAsync(new CreateEventRequest { Name = "EV", EventLink = "link", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(1), SiteId = site.Id, Status = EventStatus.Pending, ActivityIds = new List<Guid>() }, admin.Id);
 
+        // Seed one player registration into the created pool, required by service method
+        var pool = await _db.Pool.FirstAsync(p => p.Event.Id == created.Id);
+        var player = new Player { Id = Guid.NewGuid(), Firstname = "P", Lastname = "L", Email = "p@x.com", Password = "h", Username = "u1" };
+        await _db.Player.AddAsync(player);
+        await _db.PlayerRegistration.AddAsync(new PlayerRegistration { Id = Guid.NewGuid(), Player = player, Pool = pool, RegisteredAt = DateTime.UtcNow });
+        await _db.SaveChangesAsync();
+
         var updated = await _service.UpdateEventAllPlayersPresentAsync(created.Id, true);
         Assert.That(updated, Is.Not.Null);
         Assert.That(updated!.Pools[0].IsAllPlayersPresent, Is.True);
@@ -190,6 +216,29 @@ public class EventsServiceTests
             await _service.CreateEventAsync(req5, admin.Id);
         });
         Assert.That(ex!.Message, Does.Contain("maximum number of events"));
+    }
+
+    [Test]
+    public async Task UpdateEventPlayerIsPresent_sets_checked_in()
+    {
+        var (ev, _, player) = await SeedAsync();
+        var reg = await _db.PlayerRegistration.Include(r => r.Player).FirstAsync();
+        var updated = await _service.UpdateEventPlayerIsPresentAsync(ev.Id, reg.Id, true);
+        Assert.That(updated, Is.Not.Null);
+        var reloaded = await _db.PlayerRegistration.Include(r => r.Player).FirstAsync();
+        Assert.That(reloaded.CheckedInAt, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task UpdateEventPlayerIsPresent_unsets_checked_in()
+    {
+        var (ev, _, player) = await SeedAsync();
+        var reg = await _db.PlayerRegistration.Include(r => r.Player).FirstAsync();
+        await _service.UpdateEventPlayerIsPresentAsync(ev.Id, reg.Id, true);
+        var updated = await _service.UpdateEventPlayerIsPresentAsync(ev.Id, reg.Id, false);
+        Assert.That(updated, Is.Not.Null);
+        var reloaded = await _db.PlayerRegistration.Include(r => r.Player).FirstAsync();
+        Assert.That(reloaded.CheckedInAt, Is.Null);
     }
 }
 

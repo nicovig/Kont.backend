@@ -165,6 +165,20 @@ public class EventsControllerTests
         Assert.That(result, Is.InstanceOf<ObjectResult>());
         Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(404));
     }
+
+    [Test]
+    public async Task UpdatePlayerIsPresent_returns_ok_or_notfound()
+    {
+        _userCtx.GetCurrentUser().Returns(new Administrator { Id = Guid.NewGuid(), Firstname = "A", Lastname = "B", Email = "a@a.com", Password = "p", PhoneNumber = "0", Role = new Role { RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { SubscriptionType = SubscriptionType.Stroll } });
+        var ev = new Event { Id = Guid.NewGuid(), Site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" } };
+        _events.UpdateEventPlayerIsPresentAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(ev);
+        var ok = await _controller.UpdatePlayerIsPresent(Guid.NewGuid(), Guid.NewGuid(), true);
+        Assert.That(ok, Is.InstanceOf<ObjectResult>());
+
+        _events.UpdateEventPlayerIsPresentAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns((Event?)null);
+        var nf = await _controller.UpdatePlayerIsPresent(Guid.NewGuid(), Guid.NewGuid(), true);
+        Assert.That(nf, Is.InstanceOf<NotFoundObjectResult>());
+    }
 }
 
 
