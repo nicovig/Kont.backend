@@ -13,6 +13,7 @@ public class AdministratorsControllerTests
     private IAdministratorsService _service = null!;
     private ILogger<AdministratorsController> _logger = null!;
     private IUserContextService _userContextService = null!;
+    private IReferentsService _referentsService = null!;
     private AdministratorsController _controller = null!;
 
     [SetUp]
@@ -20,7 +21,8 @@ public class AdministratorsControllerTests
     {
         _service = Substitute.For<IAdministratorsService>();
         _logger = Substitute.For<ILogger<AdministratorsController>>();
-        _controller = new AdministratorsController(_service, _userContextService, _logger);
+        _referentsService = Substitute.For<IReferentsService>();
+        _controller = new AdministratorsController(_service, _userContextService, _logger, _referentsService);
     }
 
     [Test]
@@ -91,6 +93,42 @@ public class AdministratorsControllerTests
         _service.DeleteAdministratorAsync(Arg.Any<Guid>()).Returns(true);
         var result = await _controller.Delete(Guid.NewGuid());
         Assert.That(result, Is.InstanceOf<NoContentResult>());
+    }
+
+    [Test]
+    public async Task AssignReferent_ReturnsOk_WhenAssigned()
+    {
+        var playerRegistrationId = Guid.NewGuid();
+        _referentsService.AssignReferentAsync(playerRegistrationId).Returns(true);
+        var result = await _controller.AssignReferent(playerRegistrationId);
+        Assert.That(result, Is.InstanceOf<OkResult>());
+    }
+
+    [Test]
+    public async Task AssignReferent_NotFound_WhenFails()
+    {
+        var playerRegistrationId = Guid.NewGuid();
+        _referentsService.AssignReferentAsync(playerRegistrationId).Returns(false);
+        var result = await _controller.AssignReferent(playerRegistrationId);
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public async Task RemoveReferent_NoContent_WhenRemoved()
+    {
+        var playerRegistrationId = Guid.NewGuid();
+        _referentsService.RemoveReferentAsync(playerRegistrationId).Returns(true);
+        var result = await _controller.RemoveReferent(playerRegistrationId);
+        Assert.That(result, Is.InstanceOf<NoContentResult>());
+    }
+
+    [Test]
+    public async Task RemoveReferent_NotFound_WhenMissing()
+    {
+        var playerRegistrationId = Guid.NewGuid();
+        _referentsService.RemoveReferentAsync(playerRegistrationId).Returns(false);
+        var result = await _controller.RemoveReferent(playerRegistrationId);
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
     }
 }
 

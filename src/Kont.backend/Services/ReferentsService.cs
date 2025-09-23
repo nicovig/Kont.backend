@@ -6,8 +6,8 @@ namespace Kont.backend.Services;
 
 public interface IReferentsService
 {
-    Task<bool> AssignReferentAsync(Guid poolId, string referentId);
-    Task<bool> RemoveReferentAsync(Guid poolId, Guid referentId);
+    Task<bool> AssignReferentAsync(Guid playerRegistrationId);
+    Task<bool> RemoveReferentAsync(Guid playerRegistrationId);
     Task<IEnumerable<Player>> GetPoolReferentsAsync(Guid poolId);
     Task<string> GenerateRecoveryQRAsync(Guid poolId, Guid playerId);
 }
@@ -21,63 +21,37 @@ public class ReferentsService : IReferentsService
         _context = context;
     }
 
-    public async Task<bool> AssignReferentAsync(Guid poolId, string referentId)
+    public async Task<bool> AssignReferentAsync(Guid playerRegistrationId)
     {
-        var pool = await _context.Pool.FindAsync(poolId);
-        if (pool == null)
+        var playerRegistration = await _context.PlayerRegistration
+            .FirstOrDefaultAsync(pr => pr.Id == playerRegistrationId);
+
+        if (playerRegistration == null)
         {
             return false;
         }
 
-        var referent = await _context.Player.FindAsync(Guid.Parse(referentId));
-        if (referent == null)
-        {
-            return false;
-        }
+        playerRegistration.PlayerType = PlayerType.KeyPlayer;
 
-        // Check if referent is already assigned to this pool
-        var existingAssignment = await _context.PlayerRegistration
-            .FirstOrDefaultAsync(pr => pr.Player.Id == referent.Id && pr.Pool.Id == poolId);
-
-        if (existingAssignment != null)
-        {
-            return false; // Already assigned
-        }
-
-        // Create player registration for referent
-        var referentRegistration = new PlayerRegistration
-        {
-            Id = Guid.NewGuid(),
-            Player = referent,
-            Pool = pool,
-            RegisteredAt = DateTime.UtcNow,
-            CheckedInAt = DateTime.UtcNow // Referents are automatically checked in
-        };
-
-        _context.PlayerRegistration.Add(referentRegistration);
+        _context.PlayerRegistration.Update(playerRegistration);
         await _context.SaveChangesAsync();
 
         return true;
     }
 
-    public async Task<bool> RemoveReferentAsync(Guid poolId, Guid referentId)
+    public async Task<bool> RemoveReferentAsync(Guid playerRegistrationId)
     {
-        var pool = await _context.Pool.FindAsync(poolId);
-        if (pool == null)
+        var playerRegistration = await _context.PlayerRegistration
+            .FirstOrDefaultAsync(pr => pr.Id == playerRegistrationId);
+
+        if (playerRegistration == null)
         {
             return false;
         }
 
-        var referentRegistration = await _context.PlayerRegistration
-            .Include(pr => pr.Player)
-            .FirstOrDefaultAsync(pr => pr.Player.Id == referentId && pr.Pool.Id == poolId);
+        playerRegistration.PlayerType = PlayerType.Player;
 
-        if (referentRegistration == null)
-        {
-            return false;
-        }
-
-        _context.PlayerRegistration.Remove(referentRegistration);
+        _context.PlayerRegistration.Update(playerRegistration);
         await _context.SaveChangesAsync();
 
         return true;

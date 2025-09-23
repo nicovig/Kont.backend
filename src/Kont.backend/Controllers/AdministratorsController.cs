@@ -3,6 +3,7 @@ using Kont.backend.Services;
 using Kont.backend.DAL;
 using Kont.backend.Models.Request;
 using Microsoft.AspNetCore.Authorization;
+using System.ComponentModel.DataAnnotations;
 
 namespace Kont.backend.Controllers;
 
@@ -13,12 +14,14 @@ public class AdministratorsController : ControllerBase
     private readonly IAdministratorsService _service;
     private readonly IUserContextService _userContextService;
     private readonly ILogger<AdministratorsController> _logger;
+    private readonly IReferentsService _referentsService;
 
-    public AdministratorsController(IAdministratorsService service, IUserContextService userContextService, ILogger<AdministratorsController> logger)
+    public AdministratorsController(IAdministratorsService service, IUserContextService userContextService, ILogger<AdministratorsController> logger, IReferentsService referentsService)
     {
         _service = service;
         _userContextService = userContextService;
         _logger = logger;
+        _referentsService = referentsService;
     }
 
     [HttpGet("current")]
@@ -79,6 +82,25 @@ public class AdministratorsController : ControllerBase
     {
         var ok = await _service.DeleteAdministratorAsync(id);
         if (!ok) return NotFound(new { message = "Administrator not found" });
+        return NoContent();
+    }
+
+    [HttpPut("referents/{playerRegistrationId}")]
+    [Authorize(Roles = nameof(RoleType.Admin))]
+    public async Task<IActionResult> AssignReferent(Guid playerRegistrationId)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var ok = await _referentsService.AssignReferentAsync(playerRegistrationId);
+        if (!ok) return NotFound(new { message = "Player registration not found or already assigned" });
+        return Ok();
+    }
+
+    [HttpDelete("referents/{playerRegistrationId}")]
+    [Authorize(Roles = nameof(RoleType.Admin))]
+    public async Task<IActionResult> RemoveReferent(Guid playerRegistrationId)
+    {
+        var ok = await _referentsService.RemoveReferentAsync(playerRegistrationId);
+        if (!ok) return NotFound(new { message = "Player registration not found" });
         return NoContent();
     }
 }

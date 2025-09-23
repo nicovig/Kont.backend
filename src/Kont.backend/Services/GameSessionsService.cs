@@ -163,10 +163,6 @@ public class GameSessionsService : IGameSessionsService
         return groups;
     }
 
-
-
-
-
     private List<PlayerGroup> BuildGroups(GameSession gameSession, List<PlayerRegistration> playerRegistrations, int limit)
     {
         var groups = new List<PlayerGroup>();
