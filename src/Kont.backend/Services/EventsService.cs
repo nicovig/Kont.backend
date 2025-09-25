@@ -92,7 +92,14 @@ public class EventsService : IEventsService
             Event = ev,
             StartedAt = ev.StartedAt,
             EndedAt = ev.EndedAt,
-            Status = PoolStatus.Pending,
+            Status = ev.Status switch
+            {
+                EventStatus.Pending => PoolStatus.Pending,
+                EventStatus.Active => PoolStatus.Active,
+                EventStatus.Completed => PoolStatus.Completed,
+                EventStatus.Cancelled => PoolStatus.Cancelled,
+                _ => PoolStatus.Pending
+            },
             IsActive = true,
         };
         _context.Pool.Add(pool);
@@ -147,6 +154,14 @@ public class EventsService : IEventsService
             pool.Name = existing.Name;
             pool.StartedAt = existing.StartedAt;
             pool.EndedAt = existing.EndedAt;
+            pool.Status = existing.Status switch
+            {
+                EventStatus.Pending => PoolStatus.Pending,
+                EventStatus.Active => PoolStatus.Active,
+                EventStatus.Completed => PoolStatus.Completed,
+                EventStatus.Cancelled => PoolStatus.Cancelled,
+                _ => pool.Status
+            };
             if (!string.IsNullOrWhiteSpace(existing.EventLink))
             {
                 pool.QrCode = existing.EventLink;

@@ -22,6 +22,41 @@ public class EventsServiceTests
         _service = new EventsService(_db);
     }
 
+    [Test]
+    public async Task CreateEvent_SetsPoolStatus_FromEventStatus()
+    {
+        var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { SubscriptionType = SubscriptionType.Stroll } };
+        _db.Site.Add(site);
+        _db.Administrator.Add(admin);
+        await _db.SaveChangesAsync();
+
+        var req = new CreateEventRequest { Name = "EV", EventLink = "link", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(1), SiteId = site.Id, Status = EventStatus.Active, ActivityIds = new List<Guid>() };
+        var ev = await _service.CreateEventAsync(req, admin.Id);
+
+        var pool = await _db.Pool.FirstAsync(p => p.Event.Id == ev.Id);
+        Assert.That(pool.Status, Is.EqualTo(PoolStatus.Active));
+    }
+
+    [Test]
+    public async Task UpdateEvent_SyncsPoolStatus()
+    {
+        var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { SubscriptionType = SubscriptionType.Stroll } };
+        _db.Site.Add(site);
+        _db.Administrator.Add(admin);
+        await _db.SaveChangesAsync();
+
+        var created = await _service.CreateEventAsync(new CreateEventRequest { Name = "EV", EventLink = "link", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(1), SiteId = site.Id, Status = EventStatus.Pending, ActivityIds = new List<Guid>() }, admin.Id);
+
+        var upd = new UpdateEventRequest { Id = created.Id, Name = created.Name, EventLink = created.EventLink, StartedAt = created.StartedAt!.Value.AddHours(2), EndedAt = created.EndedAt!.Value.AddHours(2), Status = EventStatus.Completed, ActivityIds = new List<Guid>(), SiteId = site.Id };
+        var updated = await _service.UpdateEventAsync(created.Id, upd);
+        Assert.That(updated, Is.Not.Null);
+
+        var pool = await _db.Pool.FirstAsync(p => p.Event.Id == created.Id);
+        Assert.That(pool.Status, Is.EqualTo(PoolStatus.Completed));
+    }
+
         private async Task<(Event ev, Pool pool, Player player)> SeedAsync()
     {
         var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "Z", Country = "FR", State = "ST", PhoneNumber = "0123456789", Email = "s@s.com" };

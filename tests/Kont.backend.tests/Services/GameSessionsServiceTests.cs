@@ -99,6 +99,54 @@ public class GameSessionsServiceTests : DatabaseTester
     }
 
     [Test]
+    public async Task GenerateGroupsWithoutScores_DistributesEvenly_Test1()
+    {
+        var (ev, pool, a1, _) = await SeedBasicAsync();
+        a1.PlayersPerGroupLimit = 8;
+        // Seed 18 players
+        for (int i = 0; i < 18; i++)
+        {
+            var p = new Player { Id = Guid.NewGuid(), Firstname = $"P{i}", Lastname = "L", Email = $"p{i}@x.com", Password = "h", Username = $"u{i}" };
+            var pr = new PlayerRegistration { Id = Guid.NewGuid(), Player = p, Pool = pool, RegisteredAt = DateTime.UtcNow };
+            await _context.Player.AddAsync(p);
+            await _context.PlayerRegistration.AddAsync(pr);
+        }
+        await _context.SaveChangesAsync();
+        pool.Status = PoolStatus.Active;
+        await _context.SaveChangesAsync();
+        var gs = await _service.CreateAsync(ev.Id, a1.Id);
+        var groups = await _service.GenerateGroupsWithoutScoresAsync(gs!.Id);
+        Assert.That(groups, Is.Not.Null);
+        var list = groups!.ToList();
+        Assert.That(list.Count, Is.EqualTo(3));
+        CollectionAssert.AreEquivalent(new[] { 6, 6, 6 }, list.Select(g => g.Players.Count));
+    }
+
+    [Test]
+    public async Task GenerateGroupsWithoutScores_DistributesEvenly_Test2()
+    {
+        var (ev, pool, a1, _) = await SeedBasicAsync();
+        a1.PlayersPerGroupLimit = 5;
+        // Seed 18 players
+        for (int i = 0; i < 18; i++)
+        {
+            var p = new Player { Id = Guid.NewGuid(), Firstname = $"P{i}", Lastname = "L", Email = $"p{i}@x.com", Password = "h", Username = $"u{i}" };
+            var pr = new PlayerRegistration { Id = Guid.NewGuid(), Player = p, Pool = pool, RegisteredAt = DateTime.UtcNow };
+            await _context.Player.AddAsync(p);
+            await _context.PlayerRegistration.AddAsync(pr);
+        }
+        await _context.SaveChangesAsync();
+        pool.Status = PoolStatus.Active;
+        await _context.SaveChangesAsync();
+        var gs = await _service.CreateAsync(ev.Id, a1.Id);
+        var groups = await _service.GenerateGroupsWithoutScoresAsync(gs!.Id);
+        Assert.That(groups, Is.Not.Null);
+        var list = groups!.ToList();
+        Assert.That(list.Count, Is.EqualTo(4));
+        CollectionAssert.AreEquivalent(new[] { 5, 5, 4, 4 }, list.Select(g => g.Players.Count));
+    }
+
+    [Test]
     public async Task GenerateGroupsWithoutScores_ThrowsIfSessionNotPending()
     {
         var (ev, pool, a1, _) = await SeedBasicAsync();

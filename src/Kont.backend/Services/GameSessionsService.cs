@@ -150,10 +150,6 @@ public class GameSessionsService : IGameSessionsService
         if (gameSession.Pool.Status != PoolStatus.Active) throw new InvalidOperationException("Pool must be Active");
         var anyActive = await _context.GameSession.AnyAsync(gs => gs.Pool.Id == gameSession.Pool.Id && gs.Status == GameSessionStatus.Active);
         if (anyActive) throw new InvalidOperationException("Another GameSession is currently Active");
-        var otherSessions = await _context.GameSession.Where(gs => gs.Pool.Id == gameSession.Pool.Id && gs.Id != gameSession.Id).ToListAsync();
-        var isFirst = !otherSessions.Any();
-        var othersClosed = otherSessions.All(s => s.Status == GameSessionStatus.Completed || s.Status == GameSessionStatus.Cancelled);
-        if (!isFirst && !othersClosed) throw new InvalidOperationException("Other sessions must be Completed or Cancelled");
         var limit = gameSession.Activity.PlayersPerGroupLimit;
         if (limit <= 0) return Array.Empty<PlayerGroup>();
         var regs = GetOrderedUniqueRegistrations(gameSession);
@@ -165,12 +161,24 @@ public class GameSessionsService : IGameSessionsService
 
     private List<PlayerGroup> BuildGroups(GameSession gameSession, List<PlayerRegistration> playerRegistrations, int limit)
     {
+        var total = playerRegistrations.Count;
+        if (total == 0) return new List<PlayerGroup>();
+        var numGroups = (int)Math.Ceiling(total / (double)limit);
+        if (numGroups <= 0) numGroups = 1;
+        var baseSize = total / numGroups;
+        var remainder = total % numGroups;
+        var sizes = new List<int>();
+        for (int i = 0; i < numGroups; i++)
+        {
+            var size = baseSize + (i < remainder ? 1 : 0);
+            if (size > limit) size = limit;
+            sizes.Add(size);
+        }
         var groups = new List<PlayerGroup>();
         var index = 0;
         var groupNumber = 1;
-        while (index < playerRegistrations.Count)
+        foreach (var take in sizes)
         {
-            var take = Math.Min(limit, playerRegistrations.Count - index);
             var slice = playerRegistrations.GetRange(index, take);
             var playerGroup = new PlayerGroup
             {
