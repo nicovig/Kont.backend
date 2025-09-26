@@ -174,9 +174,11 @@ public class GameSessionsServiceTests : DatabaseTester
         pool.Status = PoolStatus.Active;
         var gs1 = await _service.CreateAsync(ev.Id, a1.Id);
         var gs2 = await _service.CreateAsync(ev.Id, a1.Id);
+
+        gs1!.Status = GameSessionStatus.Active;
         await _context.SaveChangesAsync();
         Assert.ThrowsAsync<InvalidOperationException>(async () => await _service.GenerateGroupsWithoutScoresAsync(gs2!.Id));
-        gs1!.Status = GameSessionStatus.Completed;
+        gs1.Status = GameSessionStatus.Completed;
         await _context.SaveChangesAsync();
         var ok = await _service.GenerateGroupsWithoutScoresAsync(gs2!.Id);
         Assert.That(ok, Is.Not.Null);
