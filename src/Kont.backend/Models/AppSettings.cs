@@ -13,6 +13,14 @@ public class AppSettings
     //If you need mailing
     //public SmtpOption Mailing { get; set; } = new();
 
+    public AccountLimits AccountLimit { get; set; } = new();
+
+    public class AccountLimits
+    {
+        public int CreationEventNumberLimitForEsaeSubscription { get; set; } = 1;
+        public int CreationEventNumberLimitForDeraouSubscription { get; set; } = 3;
+    }
+
     public void Check(ILogger logger)
     {
         List<string> list = [];

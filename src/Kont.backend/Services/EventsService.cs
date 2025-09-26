@@ -3,7 +3,8 @@ using Kont.backend.DAL.DatabaseContext;
 using Microsoft.EntityFrameworkCore;
 using Kont.backend.Models.Request;
 using Kont.backend.Models.Response;
-using Microsoft.Extensions.Logging;
+using Kont.backend.Models;
+using Microsoft.Extensions.Options;
 
 namespace Kont.backend.Services;
 
@@ -23,9 +24,12 @@ public class EventsService : IEventsService
 {
     private readonly IDatabaseContext _context;
 
-    public EventsService(IDatabaseContext context)
+    private readonly AppSettings _settings;
+
+    public EventsService(IDatabaseContext context, IOptions<AppSettings> option)
     {
         _context = context;
+        _settings = option.Value;
     }
 
     public async Task<IEnumerable<Event>> GetEventsAsync()
@@ -51,12 +55,12 @@ public class EventsService : IEventsService
     public async Task<Event> CreateEventAsync(CreateEventRequest request, Guid createdById)
     {
         var site = await _context.Site.FindAsync(request.SiteId) ?? throw new ArgumentException("Site not found");
-        var admin = await _context.Administrator.FindAsync(createdById) ?? throw new ArgumentException("Administrator not found");
+        var admin = await _context.Administrator.Include(a => a.Subscription).FirstOrDefaultAsync(a => a.Id == createdById) ?? throw new ArgumentException("Administrator not found");
 
         var createdEventLength = await _context.Event.CountAsync(e => e.CreatedBy.Id == createdById);
 
-        if (admin.Subscription.SubscriptionType == SubscriptionType.Esae && createdEventLength > 0 || 
-            admin.Subscription.SubscriptionType == SubscriptionType.Deraou && createdEventLength > 3) {
+        if (admin.Subscription.SubscriptionType == SubscriptionType.Esae && createdEventLength > _settings.AccountLimit.CreationEventNumberLimitForEsaeSubscription || 
+            admin.Subscription.SubscriptionType == SubscriptionType.Deraou && createdEventLength > _settings.AccountLimit.CreationEventNumberLimitForDeraouSubscription) {
             throw new ArgumentException("You have reached the maximum number of events for your subscription");
         }
 

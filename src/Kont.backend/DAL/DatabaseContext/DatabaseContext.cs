@@ -1,5 +1,4 @@
-﻿using Kont.backend.DAL;
-using Kont.backend.Models;
+﻿using Kont.backend.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.Extensions.Options;
