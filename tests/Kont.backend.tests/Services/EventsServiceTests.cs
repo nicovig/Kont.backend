@@ -17,9 +17,9 @@ public class EventsServiceTests
         var options = new DbContextOptionsBuilder<DatabaseContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
-        var appSettings = Microsoft.Extensions.Options.Options.Create(new Kont.backend.Models.AppSettings());
+        var appSettings = Microsoft.Extensions.Options.Options.Create(new Kont.backend.Models.AppSettings() { AccountLimit = { CreationEventNumberLimitForDeraouSubscription = 3, CreationEventNumberLimitForEsaeSubscription = 0 } });
         _db = new DatabaseContext(options, appSettings);
-        _service = new EventsService(_db);
+        _service = new EventsService(_db, appSettings);
     }
 
     [Test]
