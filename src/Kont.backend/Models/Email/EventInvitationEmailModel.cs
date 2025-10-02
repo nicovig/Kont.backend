@@ -9,4 +9,5 @@ public class EventInvitationEmailModel
     public required string JoinUrl { get; set; }
     public required string QrCodeBase64 { get; set; }
     public required string Locale { get; set; }
+    public required string LogoUrl { get; set; }
 }

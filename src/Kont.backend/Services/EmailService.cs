@@ -56,11 +56,20 @@ public class EmailService : IEmailService
             email.Body = builder.ToMessageBody();
 
             using var client = new SmtpClient();
-            await client.ConnectAsync(_configuration["Email:SmtpHost"] ?? "localhost", 
-                int.Parse(_configuration["Email:SmtpPort"] ?? "587"), 
-                MailKit.Security.SecureSocketOptions.StartTls);
-            
-            await client.AuthenticateAsync(_configuration["Email:Username"], _configuration["Email:Password"]);
+            var host = _configuration["Email:SmtpHost"] ?? "localhost";
+            var port = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
+            var user = _configuration["Email:Username"] ?? string.Empty;
+            var pass = _configuration["Email:Password"] ?? string.Empty;
+
+            var useStartTls = !string.IsNullOrWhiteSpace(user) && port != 1025;
+            var socket = useStartTls ? MailKit.Security.SecureSocketOptions.StartTls : MailKit.Security.SecureSocketOptions.None;
+
+            await client.ConnectAsync(host, port, socket);
+
+            if (!string.IsNullOrWhiteSpace(user))
+            {
+                await client.AuthenticateAsync(user, pass);
+            }
             await client.SendAsync(email);
             await client.DisconnectAsync(true);
 

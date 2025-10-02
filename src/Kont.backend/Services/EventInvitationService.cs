@@ -80,6 +80,7 @@ public class EventInvitationService : IEventInvitationService
             ? $"Join {eventEntity.Name} - Pool {pool.Name}"
             : $"Rejoindre {eventEntity.Name} - Groupe {pool.Name}";
 
+        var logoUrl = _configuration["AppSettings:FrontUrl"]?.TrimEnd('/') + "/assets/logo.png";
         var emailModel = new EventInvitationEmailModel
         {
             EventName = eventEntity.Name,
@@ -88,7 +89,8 @@ public class EventInvitationService : IEventInvitationService
             EventDate = eventEntity.StartedAt ?? DateTime.UtcNow,
             JoinUrl = joinUrl,
             QrCodeBase64 = qrCodeBase64,
-            Locale = locale
+            Locale = locale,
+            LogoUrl = logoUrl ?? ""
         };
 
         var htmlBody = await _emailTemplateService.RenderEventInvitationTemplateAsync(emailModel);

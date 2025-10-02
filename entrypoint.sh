@@ -4,7 +4,7 @@
 set -e
 
 if [ -z "$1" ]; then
-    exec dotnet exec Galarne.Template.AspNet.dll
+    exec dotnet Kont.backend.dll
 fi
 
 exec "$@"

@@ -31,14 +31,19 @@ public class EmailTemplateService : IEmailTemplateService
     public async Task<string> RenderEventInvitationTemplateAsync(EventInvitationEmailModel model)
     {
         var viewName = "EventInvitation";
-        var viewPath = $"~/Views/EmailTemplates/{viewName}.cshtml";
+        var viewPath = $"/Views/EmailTemplates/{viewName}.cshtml";
 
         var actionContext = new ActionContext(
             new DefaultHttpContext { RequestServices = _serviceProvider },
             new Microsoft.AspNetCore.Routing.RouteData(),
             new Microsoft.AspNetCore.Mvc.Abstractions.ActionDescriptor());
 
-        var viewResult = _viewEngine.FindView(actionContext, viewPath, false);
+        var viewResult = _viewEngine.GetView(null, viewPath, true);
+        if (!viewResult.Success)
+        {
+            var altPath = $"Views/EmailTemplates/{viewName}.cshtml";
+            viewResult = _viewEngine.GetView(null, altPath, true);
+        }
 
         if (!viewResult.Success)
         {
