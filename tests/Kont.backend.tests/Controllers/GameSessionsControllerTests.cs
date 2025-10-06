@@ -96,6 +96,34 @@ public class GameSessionsControllerTests
         var br = await _controller.GenerateGroupsWithScores(Guid.NewGuid());
         Assert.That(br, Is.InstanceOf<BadRequestObjectResult>());
     }
+
+    [Test]
+    public async Task GetScores_ReturnsOkOrBadRequestOrNotFound()
+    {
+        _service.GetSessionScoresAsync(Arg.Any<Guid>()).Returns(new List<Kont.backend.Models.Scoring.PlayerRanking>());
+        var ok = await _controller.GetScores(Guid.NewGuid());
+        Assert.That(ok, Is.InstanceOf<ObjectResult>());
+
+        _service.GetSessionScoresAsync(Arg.Any<Guid>()).Returns((IEnumerable<Kont.backend.Models.Scoring.PlayerRanking>?)null);
+        var nf = await _controller.GetScores(Guid.NewGuid());
+        Assert.That(nf, Is.InstanceOf<NotFoundObjectResult>());
+
+        _service.GetSessionScoresAsync(Arg.Any<Guid>()).Returns<Task<IEnumerable<Kont.backend.Models.Scoring.PlayerRanking>>?>(_ => throw new InvalidOperationException("e"));
+        var br = await _controller.GetScores(Guid.NewGuid());
+        Assert.That(br, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public async Task GetGroups_ReturnsOkOrNotFound()
+    {
+        _service.GetGroupsAsync(Arg.Any<Guid>()).Returns(new List<PlayerGroup> { new PlayerGroup { Id = Guid.NewGuid(), Players = new List<PlayerRegistration> { new PlayerRegistration { Id = Guid.NewGuid(), Player = new Player { Id = Guid.NewGuid(), Username = "u" } } } } });
+        var ok = await _controller.GetGroups(Guid.NewGuid());
+        Assert.That(ok, Is.InstanceOf<ObjectResult>());
+
+        _service.GetGroupsAsync(Arg.Any<Guid>()).Returns((IEnumerable<PlayerGroup>?)null);
+        var nf = await _controller.GetGroups(Guid.NewGuid());
+        Assert.That(nf, Is.InstanceOf<NotFoundObjectResult>());
+    }
 }
 
 

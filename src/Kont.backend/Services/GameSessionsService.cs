@@ -14,6 +14,8 @@ public interface IGameSessionsService
     Task<bool> DeleteAsync(Guid id);
     Task<IEnumerable<PlayerGroup>?> GenerateGroupsWithoutScoresAsync(Guid gameSessionId);
     Task<IEnumerable<PlayerGroup>?> GenerateGroupsWithScoresAsync(Guid gameSessionId);
+    Task<IEnumerable<PlayerGroup>?> GetGroupsAsync(Guid gameSessionId);
+    Task<IEnumerable<Kont.backend.Models.Scoring.PlayerRanking>?> GetSessionScoresAsync(Guid gameSessionId);
 }
 
 public class GameSessionsService : IGameSessionsService
@@ -227,12 +229,25 @@ public class GameSessionsService : IGameSessionsService
         return groups;
     }
     
+    public async Task<IEnumerable<Kont.backend.Models.Scoring.PlayerRanking>?> GetSessionScoresAsync(Guid gameSessionId)
+    {
+        var gameSession = await _context.GameSession
+            .Include(x => x.Activity)
+            .Include(x => x.Pool)
+            .FirstOrDefaultAsync(x => x.Id == gameSessionId);
+        if (gameSession == null) return null;
+        if (gameSession.Status != GameSessionStatus.Completed) throw new InvalidOperationException("GameSession must be Completed to view scores");
+        var rankings = await _scoringService.GetActivityRankingsAsync(gameSession.Pool.Id, gameSession.Activity.Id);
+        return rankings;
+    }
+    
     private async Task<GameSession?> LoadGameSessionGraphAsync(Guid gameSessionId) => await _context.GameSession
             .Include(x => x.Activity)
             .Include(x => x.Pool)
                 .ThenInclude(p => p.PlayerRegistrations)
             .Include(x => x.PlayerGroups)
                 .ThenInclude(pg => pg.Players)
+            .ThenInclude(pr => pr.Player)
             .FirstOrDefaultAsync(x => x.Id == gameSessionId);
 
     private List<PlayerRegistration> GetOrderedUniqueRegistrations(GameSession gameSession) => gameSession.Pool.PlayerRegistrations
@@ -241,6 +256,26 @@ public class GameSessionsService : IGameSessionsService
             .OrderBy(r => r.RegisteredAt)
             .ThenBy(r => r.Id)
             .ToList();
+
+    public async Task<IEnumerable<PlayerGroup>?> GetGroupsAsync(Guid gameSessionId)
+    {
+        var gameSession = await _context.GameSession
+            .Include(x => x.PlayerGroups)
+                .ThenInclude(pg => pg.Players)
+                    .ThenInclude(pr => pr.Player)
+            .FirstOrDefaultAsync(x => x.Id == gameSessionId);
+        if (gameSession == null) return null;
+        var groups = gameSession.PlayerGroups
+            .OrderBy(g => g.GroupNumber)
+            .ToList();
+        foreach (var g in groups)
+        {
+            g.Players = g.Players
+                .OrderBy(pr => pr.Player.Username)
+                .ToList();
+        }
+        return groups;
+    }
 }
 
 

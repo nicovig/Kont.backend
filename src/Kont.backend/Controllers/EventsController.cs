@@ -157,6 +157,24 @@ public class EventsController : ControllerBase
         if (ev == null) return NotFound(new { message = "Event or player not found" });
         return Ok(ev);
     }
+
+    [HttpPost("{id}/end")]
+    [ProducesResponseType(typeof(Event), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> End(Guid id)
+    {
+        try
+        {
+            var ev = await _eventsService.EndEventAsync(id);
+            if (ev == null) return NotFound(new { message = "Event not found" });
+            return Ok(ev);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }
 
 

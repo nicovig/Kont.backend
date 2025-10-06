@@ -235,7 +235,7 @@ public class GameSessionsServiceTests : DatabaseTester
         Assert.That(groups, Is.Not.Null);
         var list = groups!.ToList();
         // First group should contain the highest percentage players
-        var firstGroup = list.First();
+        var firstGroup = list[0];
         var topUsernames = firstGroup.Players.Select(p => p.Player.Username).ToList();
         CollectionAssert.Contains(topUsernames, regs[0].Player.Username);
     }
@@ -307,6 +307,60 @@ public class GameSessionsServiceTests : DatabaseTester
         _context.GameSession.AddRange(s1, s2);
         await _context.SaveChangesAsync();
         Assert.ThrowsAsync<InvalidOperationException>(async () => await _service.GenerateGroupsWithoutScoresAsync(s2.Id));
+    }
+
+    [Test]
+    public async Task GetSessionScores_returns_scores_when_completed()
+    {
+        var (ev, pool, a1, _) = await SeedBasicAsync(EventStatus.Pending, PoolStatus.Active);
+        var gs = await _service.CreateAsync(ev.Id, a1.Id);
+        gs!.Status = GameSessionStatus.Completed;
+        await _context.SaveChangesAsync();
+        _scoring.GetActivityRankingsAsync(pool.Id, a1.Id).Returns(Task.FromResult(new List<Kont.backend.Models.Scoring.PlayerRanking>() as List<Kont.backend.Models.Scoring.PlayerRanking>));
+        var scores = await _service.GetSessionScoresAsync(gs.Id);
+        Assert.That(scores, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task GetSessionScores_throws_when_not_completed()
+    {
+        var (ev, pool, a1, _) = await SeedBasicAsync(EventStatus.Pending, PoolStatus.Active);
+        var gs = await _service.CreateAsync(ev.Id, a1.Id);
+        gs!.Status = GameSessionStatus.Active;
+        await _context.SaveChangesAsync();
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await _service.GetSessionScoresAsync(gs.Id));
+    }
+
+    [Test]
+    public async Task GetGroups_returns_groups_with_players()
+    {
+        var (ev, pool, a1, _) = await SeedBasicAsync(EventStatus.Pending, PoolStatus.Active);
+        var s = await _service.CreateAsync(ev.Id, a1.Id);
+        var players = new List<PlayerRegistration>();
+        for (int i = 0; i < 3; i++)
+        {
+            var p = new Player { Id = Guid.NewGuid(), Firstname = $"P{i}", Lastname = "L", Email = $"p{i}@x.com", Password = "h", Username = $"u{i}" };
+            var pr = new PlayerRegistration { Id = Guid.NewGuid(), Player = p, Pool = pool, RegisteredAt = DateTime.UtcNow };
+            await _context.Player.AddAsync(p);
+            await _context.PlayerRegistration.AddAsync(pr);
+            players.Add(pr);
+        }
+        await _context.SaveChangesAsync();
+        var groups = await _service.GenerateGroupsWithoutScoresAsync(s!.Id);
+        Assert.That(groups, Is.Not.Null);
+        var fetched = await _service.GetGroupsAsync(s!.Id);
+        Assert.That(fetched, Is.Not.Null);
+        var list = fetched!.ToList();
+        Assert.That(list.Count, Is.GreaterThan(0));
+        Assert.That(list[0].Players.Count, Is.GreaterThan(0));
+        Assert.That(list[0].Players[0].Player.Username, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task GetGroups_returns_null_when_session_not_found()
+    {
+        var res = await _service.GetGroupsAsync(Guid.NewGuid());
+        Assert.That(res, Is.Null);
     }
 }
 

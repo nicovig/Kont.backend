@@ -275,6 +275,40 @@ public class EventsServiceTests
         var reloaded = await _db.PlayerRegistration.Include(r => r.Player).FirstAsync();
         Assert.That(reloaded.CheckedInAt, Is.Null);
     }
+
+    [Test]
+    public async Task EndEvent_sets_completed_when_no_active_sessions()
+    {
+        var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { SubscriptionType = SubscriptionType.Stroll } };
+        _db.Site.Add(site);
+        _db.Administrator.Add(admin);
+        await _db.SaveChangesAsync();
+        var created = await _service.CreateEventAsync(new CreateEventRequest { Name = "EV", EventLink = "link", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(1), SiteId = site.Id, Status = EventStatus.Pending, ActivityIds = new List<Guid>() }, admin.Id);
+        var ended = await _service.EndEventAsync(created.Id);
+        Assert.That(ended, Is.Not.Null);
+        Assert.That(ended!.Status, Is.EqualTo(EventStatus.Completed));
+        var pool = await _db.Pool.FirstAsync(p => p.Event.Id == created.Id);
+        Assert.That(pool.Status, Is.EqualTo(PoolStatus.Completed));
+    }
+
+    [Test]
+    public async Task EndEvent_throws_if_any_session_active()
+    {
+        var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Password = "p", PhoneNumber = "0", Role = new Role { RoleType = RoleType.Admin }, IsActive = true, Subscription = new Subscription { SubscriptionType = SubscriptionType.Stroll } };
+        _db.Site.Add(site);
+        _db.Administrator.Add(admin);
+        await _db.SaveChangesAsync();
+        var created = await _service.CreateEventAsync(new CreateEventRequest { Name = "EV", EventLink = "link", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(1), SiteId = site.Id, Status = EventStatus.Pending, ActivityIds = new List<Guid>() }, admin.Id);
+        var pool = await _db.Pool.FirstAsync(p => p.Event.Id == created.Id);
+        var activity = new Activity { Id = Guid.NewGuid(), Name = "A", Site = site, CreatedBy = admin, PlayersPerGroupLimit = 2 };
+        _db.Activity.Add(activity);
+        var gs = new GameSession { Id = Guid.NewGuid(), Pool = pool, Activity = activity, Status = GameSessionStatus.Active, CreatedAt = DateTime.UtcNow };
+        _db.GameSession.Add(gs);
+        await _db.SaveChangesAsync();
+        Assert.ThrowsAsync<InvalidOperationException>(async () => await _service.EndEventAsync(created.Id));
+    }
 }
 
 

@@ -179,6 +179,23 @@ public class EventsControllerTests
         var nf = await _controller.UpdatePlayerIsPresent(Guid.NewGuid(), Guid.NewGuid(), true);
         Assert.That(nf, Is.InstanceOf<NotFoundObjectResult>());
     }
+
+    [Test]
+    public async Task End_ReturnsOk_Or_NotFound_Or_BadRequest()
+    {
+        var id = Guid.NewGuid();
+        _events.EndEventAsync(id).Returns(new Event { Id = id, Site = new Site { Id = Guid.NewGuid() } });
+        var ok = await _controller.End(id);
+        Assert.That(ok, Is.InstanceOf<ObjectResult>());
+
+        _events.EndEventAsync(id).Returns((Event?)null);
+        var nf = await _controller.End(id);
+        Assert.That(nf, Is.InstanceOf<NotFoundObjectResult>());
+
+        _events.EndEventAsync(id).Returns<Task<Event>?>(_ => throw new InvalidOperationException("active"));
+        var br = await _controller.End(id);
+        Assert.That(br, Is.InstanceOf<BadRequestObjectResult>());
+    }
 }
 
 

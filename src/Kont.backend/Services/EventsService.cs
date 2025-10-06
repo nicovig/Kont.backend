@@ -12,12 +12,14 @@ public interface IEventsService
 {
     Task<IEnumerable<Event>> GetEventsAsync();
     Task<Event?> GetEventByIdAsync(Guid id);
+    Task<Event?> GetEventByLinkAsync(string eventLink);
     Task<Event> CreateEventAsync(CreateEventRequest request, Guid createdById);
     Task<Event?> UpdateEventAsync(Guid id, UpdateEventRequest request);
     Task<bool> DeleteEventAsync(Guid id);
     Task<Event?> UpdateEventAllPlayersPresentAsync(Guid eventId, bool isAllPlayersPresent);
     Task<Event?> UpdateEventPlayerIsPresentAsync(Guid eventId, Guid playerRegistrationId, bool isPresent);    
     Task<IEnumerable<PlayerRegistrationResponse>> GetPlayerRegistrationsByEventAsync(Guid eventId);
+    Task<Event?> EndEventAsync(Guid eventId);
 }
 
 public class EventsService : IEventsService
@@ -50,6 +52,16 @@ public class EventsService : IEventsService
             .Include(e => e.Pools)
             .Include(e => e.CreatedBy)
             .FirstOrDefaultAsync(e => e.Id == id);
+    }
+
+    public async Task<Event?> GetEventByLinkAsync(string eventLink)
+    {
+        return await _context.Event
+            .Include(e => e.Site)
+            .Include(e => e.Activities)
+            .Include(e => e.Pools)
+            .Include(e => e.CreatedBy)
+            .FirstOrDefaultAsync(e => e.EventLink == eventLink);
     }
 
     public async Task<Event> CreateEventAsync(CreateEventRequest request, Guid createdById)
@@ -261,6 +273,27 @@ public class EventsService : IEventsService
             RegisteredAt = pr.RegisteredAt,
             CheckedInAt = pr.CheckedInAt
         });
+    }
+
+    public async Task<Event?> EndEventAsync(Guid eventId)
+    {
+        var eventDb = await _context.Event
+            .Include(e => e.Pools)
+            .FirstOrDefaultAsync(e => e.Id == eventId);
+        if (eventDb == null) return null;
+
+        var hasActiveSession = await _context.GameSession.AnyAsync(gs => gs.Pool.Event.Id == eventId && gs.Status == GameSessionStatus.Active);
+        if (hasActiveSession) throw new InvalidOperationException("Event cannot be completed while a game session is active");
+
+        eventDb.Status = EventStatus.Completed;
+        if (!eventDb.EndedAt.HasValue) eventDb.EndedAt = DateTime.UtcNow;
+        foreach (var pool in eventDb.Pools)
+        {
+            pool.Status = PoolStatus.Completed;
+            if (!pool.EndedAt.HasValue) pool.EndedAt = eventDb.EndedAt;
+        }
+        await _context.SaveChangesAsync();
+        return eventDb;
     }
 }
 

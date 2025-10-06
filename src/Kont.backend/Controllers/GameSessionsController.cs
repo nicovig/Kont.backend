@@ -11,6 +11,7 @@ namespace Kont.backend.Controllers;
 public class GameSessionsController : ControllerBase
 {
     private readonly IGameSessionsService _service;
+    private const string NotFoundMessage = "GameSession not found";
 
     public GameSessionsController(IGameSessionsService service)
     {
@@ -41,7 +42,7 @@ public class GameSessionsController : ControllerBase
     public async Task<IActionResult> UpdateStatus(Guid id, GameSessionStatus status)
     {
         var updated = await _service.UpdateStatusAsync(id, status);
-        if (updated == null) return NotFound(new { message = "GameSession not found" });
+        if (updated == null) return NotFound(new { message = NotFoundMessage });
         return Ok(updated);
     }
 
@@ -50,7 +51,7 @@ public class GameSessionsController : ControllerBase
     public async Task<IActionResult> Delete(Guid id)
     {
         var ok = await _service.DeleteAsync(id);
-        if (!ok) return NotFound(new { message = "GameSession not found" });
+        if (!ok) return NotFound(new { message = NotFoundMessage });
         return NoContent();
     }
 
@@ -61,7 +62,7 @@ public class GameSessionsController : ControllerBase
         try
         {
             var groups = await _service.GenerateGroupsWithoutScoresAsync(id);
-            if (groups == null) return NotFound(new { message = "GameSession not found" });
+            if (groups == null) return NotFound(new { message = NotFoundMessage });
             return Ok(groups);
         }
         catch (InvalidOperationException ex)
@@ -77,7 +78,7 @@ public class GameSessionsController : ControllerBase
         try
         {
             var groups = await _service.GenerateGroupsWithScoresAsync(id);
-            if (groups == null) return NotFound(new { message = "GameSession not found" });
+            if (groups == null) return NotFound(new { message = NotFoundMessage });
             return Ok(groups);
         }
         catch (InvalidOperationException ex)
@@ -92,7 +93,7 @@ public class GameSessionsController : ControllerBase
     public async Task<IActionResult> UpdateStartTime(Guid id, [FromBody] UpdateStartTimeRequest req)
     {
         var updated = await _service.UpdateStartTimeAsync(id, req.StartedAt);
-        if (updated == null) return NotFound(new { message = "GameSession not found" });
+        if (updated == null) return NotFound(new { message = NotFoundMessage });
         return Ok(updated);
     }
 
@@ -102,8 +103,33 @@ public class GameSessionsController : ControllerBase
     public async Task<IActionResult> UpdateEndTime(Guid id, [FromBody] UpdateEndTimeRequest req)
     {
         var updated = await _service.UpdateEndTimeAsync(id, req.EndedAt);
-        if (updated == null) return NotFound(new { message = "GameSession not found" });
+        if (updated == null) return NotFound(new { message = NotFoundMessage });
         return Ok(updated);
+    }
+
+    [HttpGet("{id}/groups")]
+    [ProducesResponseType(typeof(IEnumerable<PlayerGroup>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetGroups(Guid id)
+    {
+        var groups = await _service.GetGroupsAsync(id);
+        if (groups == null) return NotFound(new { message = NotFoundMessage });
+        return Ok(groups);
+    }
+
+    [HttpGet("{id}/scores")]
+    [ProducesResponseType(typeof(IEnumerable<Kont.backend.Models.Scoring.PlayerRanking>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetScores(Guid id)
+    {
+        try
+        {
+            var scores = await _service.GetSessionScoresAsync(id);
+            if (scores == null) return NotFound(new { message = NotFoundMessage });
+            return Ok(scores);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }
 
