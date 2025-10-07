@@ -56,7 +56,7 @@ public class EventInvitationService : IEventInvitationService
         }
 
         var baseUrl = _configuration["ApplicationBaseUrl"] ?? "https://kont.com";
-        var joinUrl = $"{baseUrl}/event/{eventEntity.EventLink}/{pool.Id}";
+        var joinUrl = $"{baseUrl}/event/{eventEntity.Id}/{pool.Id}";
 
         var qrCodeBase64 = _qrCodeService.GenerateBase64Png(joinUrl);
 

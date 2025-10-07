@@ -21,5 +21,6 @@ public enum RoleType
 {
     God,
     Admin,
-    Manager
+    Manager,
+    Player
 }

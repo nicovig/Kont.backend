@@ -1,10 +1,12 @@
+using Kont.backend.DAL;
+using Kont.backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Kont.backend.Services;
+// using kept minimal; fully qualify types below
 
 namespace Kont.backend.Controllers;
 
-[Route("public/events")]
+[Route("[controller]")]
 [ApiController]
 [Authorize(Roles = nameof(RoleType.Player))]
 public class PlayerController : ControllerBase
@@ -16,15 +18,16 @@ public class PlayerController : ControllerBase
         _eventsService = eventsService;
     }
 
-    [HttpGet("{eventLink}")]
+    [HttpGet("{id}")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Kont.backend.Models.Response.PlayerEventInfoResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetByLink(string eventLink)
+    public async Task<IActionResult> GetById(Guid id)
     {
-        var ev = await _eventsService.GetEventByLinkAsync(eventLink);
+        var ev = await _eventsService.GetEventByIdAsync(id);
         if (ev == null) return NotFound(new { message = "Event not found" });
-        return Ok(new { name = ev.Name, date = ev.StartedAt, status = ev.Status.ToString() });
+        var location = ev.Site != null ? $"{ev.Site.Name}\n{ev.Site.Address}\n{ev.Site.City}" : string.Empty;
+        return Ok(new Kont.backend.Models.Response.PlayerEventInfoResponse { Name = ev.Name, StartDate = ev.StartedAt, EndDate = ev.EndedAt, Location = location });
     }
 }
 

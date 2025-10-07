@@ -8,6 +8,7 @@ namespace Kont.backend.Controllers;
 
 [Route("[controller]")]
 [ApiController]
+[Authorize(Roles = nameof(RoleType.God))]
 public class GodController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -30,6 +31,7 @@ public class GodController : ControllerBase
     /// <response code="400">Invalid request data</response>
     /// <response code="401">Invalid credentials</response>
     [HttpPost()]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(JwtResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
