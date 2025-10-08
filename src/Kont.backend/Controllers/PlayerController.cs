@@ -38,6 +38,7 @@ public class PlayerController : ControllerBase
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Register(Guid eventId, Guid poolId, [FromBody] PlayerRegisterRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Pin))
@@ -47,6 +48,12 @@ public class PlayerController : ControllerBase
         if (ev == null) return NotFound(new { message = "Event not found" });
         var pool = ev.Pools.FirstOrDefault(p => p.Id == poolId);
         if (pool == null) return NotFound(new { message = "Pool not found" });
+
+        // Conflicts: email or username already taken
+        var emailTaken = _context.Player.Any(p => p.Email == request.Email);
+        if (emailTaken) return Conflict(new { code = "email_taken", message = "Email déjà utilisé" });
+        var usernameTaken = _context.Player.Any(p => p.Username == request.Username);
+        if (usernameTaken) return Conflict(new { code = "username_taken", message = "Nom d'utilisateur déjà utilisé" });
 
         var player = new Kont.backend.DAL.Player
         {
@@ -68,6 +75,48 @@ public class PlayerController : ControllerBase
         _context.PlayerRegistration.Add(registration);
         await _context.SaveChangesAsync();
         return Created(string.Empty, new { registration.Id });
+    }
+
+    public class PlayerLoginRequest
+    {
+        public string Identifier { get; set; } = string.Empty; // email or username
+        public string Pin { get; set; } = string.Empty;
+    }
+
+    [HttpPost("login")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public IActionResult Login([FromBody] PlayerLoginRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Identifier) || string.IsNullOrWhiteSpace(request.Pin))
+            return BadRequest(new { message = "Invalid payload" });
+
+        var player = _context.Player.FirstOrDefault(p => p.Email == request.Identifier || p.Username == request.Identifier);
+        if (player == null) return Unauthorized(new { code = "not_found", message = "Compte introuvable" });
+        if (player.Password != request.Pin) return Unauthorized(new { code = "bad_pin", message = "Code PIN invalide" });
+        return Ok(new { playerId = player.Id });
+    }
+
+    [HttpGet("check-email")] 
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult CheckEmail([FromQuery] string email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return Ok(new { available = false });
+        var exists = _context.Player.Any(p => p.Email == email);
+        return Ok(new { available = !exists });
+    }
+
+    [HttpGet("check-username")] 
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult CheckUsername([FromQuery] string username)
+    {
+        if (string.IsNullOrWhiteSpace(username)) return Ok(new { available = false });
+        var exists = _context.Player.Any(p => p.Username == username);
+        return Ok(new { available = !exists });
     }
 }
 
