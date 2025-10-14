@@ -1,24 +1,25 @@
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using Kont.backend.Controllers;
+using Kont.backend.Models.Request;
 using Kont.backend.Services;
 using Kont.backend.DAL;
+using Kont.backend.tests.Tools;
+using Kont.backend.Models.Response;
 // using kept minimal; fully qualify types below
 
 namespace Kont.backend.tests.Controllers;
 
 [TestFixture]
-public class PlayerControllerTests
+public class PlayerControllerTests : DatabaseTester
 {
     private IEventsService _events;
-    private Kont.backend.DAL.DatabaseContext.IDatabaseContext _context;
     private PlayerController _controller;
 
     [SetUp]
     public void Setup()
     {
         _events = Substitute.For<IEventsService>();
-        _context = Substitute.For<Kont.backend.DAL.DatabaseContext.IDatabaseContext>();
         _controller = new PlayerController(_events, _context);
     }
 
@@ -27,7 +28,7 @@ public class PlayerControllerTests
     {
         var id = Guid.NewGuid();
         _events.GetEventByIdAsync(id).Returns((Event?)null);
-        var result = await _controller.GetById(id);
+        var result = await _controller.GetEventById(id);
         Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
     }
 
@@ -37,10 +38,10 @@ public class PlayerControllerTests
         var id = Guid.NewGuid();
         var ev = new Event { Id = id, Name = "My Event", EventLink = "abc", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(1), Site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" }, Status = EventStatus.Active, CreatedBy = new Administrator { Id = Guid.NewGuid() } };
         _events.GetEventByIdAsync(id).Returns(ev);
-        var result = await _controller.GetById(id);
+        var result = await _controller.GetEventById(id);
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
         var ok = (OkObjectResult)result;
-        var value = ok.Value as Kont.backend.Models.Response.PlayerEventInfoResponse;
+        var value = ok.Value as PlayerEventInfoResponse;
         Assert.That(value, Is.Not.Null);
         Assert.That(value!.Name, Is.EqualTo("My Event"));
         Assert.That(value!.Location, Does.Contain("S"));
@@ -51,15 +52,22 @@ public class PlayerControllerTests
     {
         var eventId = Guid.NewGuid();
         var poolId = Guid.NewGuid();
-        var ev = new Event { Id = eventId, Pools = new List<Pool> { new Pool { Id = poolId } }, Site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" } };
+        var site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" };
+        var admin = new Administrator { Id = Guid.NewGuid(), Firstname = "Adm", Lastname = "In", Email = "adm@e.com", Password = "p", IsActive = true, PhoneNumber = "0", Role = new Role { Id = Guid.NewGuid(), CreatedAt = DateTime.UtcNow, RoleType = RoleType.Admin }, Subscription = new Subscription { Id = Guid.NewGuid(), ExpiresAt = DateTime.UtcNow.AddDays(1), PaidAt = DateTime.UtcNow, SubscriptionType = SubscriptionType.Klasel } };
+        var ev = new Event { Id = eventId, Name = "Evt", EventLink = "abc", StartedAt = DateTime.UtcNow, EndedAt = DateTime.UtcNow.AddHours(1), Site = site, Status = EventStatus.Active, CreatedBy = admin };
+        await _context.Event.AddAsync(ev);
+        await _context.SaveChangesAsync();
+        var pool = new Pool { Id = poolId, Name = "P1", QrCode = "QR", Event = ev };
+        await _context.Pool.AddAsync(pool);
+        await _context.SaveChangesAsync();
+        ev.Pools = new List<Pool> { pool };
         _events.GetEventByIdAsync(eventId).Returns(ev);
 
-        var req = new Kont.backend.Models.Request.PlayerRegisterRequest { Firstname = "John", Lastname = "Doe", Email = "john@doe.com", Username = "johnd", Pin = "1234" };
+        var req = new PlayerRegisterRequest { Firstname = "John", Lastname = "Doe", Email = "john@doe.com", Username = "johnd", Pin = "1234" };
 
         var result = await _controller.Register(eventId, poolId, req);
 
         Assert.That(result, Is.InstanceOf<CreatedResult>());
-        await _context.Received(1).SaveChangesAsync();
     }
 
     [Test]
@@ -67,12 +75,13 @@ public class PlayerControllerTests
     {
         var eventId = Guid.NewGuid();
         var poolId = Guid.NewGuid();
-        var ev = new Event { Id = eventId, Pools = new List<Pool> { new Pool { Id = poolId } } };
+        var ev = new Event { Id = eventId, Pools = new List<Pool> { new Pool { Id = poolId } }, Site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" } };
         _events.GetEventByIdAsync(eventId).Returns(ev);
 
-        _context.Player.Any(p => p.Email == "john@doe.com").Returns(true);
+        await _context.Player.AddAsync(new Player { Id = Guid.NewGuid(), Firstname = "John", Lastname = "Doe", Email = "john@doe.com", Username = "any", Password = "x" });
+        await _context.SaveChangesAsync();
 
-        var req = new Kont.backend.Models.Request.PlayerRegisterRequest { Firstname = "John", Lastname = "Doe", Email = "john@doe.com", Username = "johnd", Pin = "12345" };
+        var req = new PlayerRegisterRequest { Firstname = "John", Lastname = "Doe", Email = "john@doe.com", Username = "johnd", Pin = "12345" };
         var result = await _controller.Register(eventId, poolId, req);
         Assert.That(result, Is.InstanceOf<ConflictObjectResult>());
     }
@@ -82,12 +91,13 @@ public class PlayerControllerTests
     {
         var eventId = Guid.NewGuid();
         var poolId = Guid.NewGuid();
-        var ev = new Event { Id = eventId, Pools = new List<Pool> { new Pool { Id = poolId } } };
+        var ev = new Event { Id = eventId, Pools = new List<Pool> { new Pool { Id = poolId } }, Site = new Site { Id = Guid.NewGuid(), Name = "S", Address = "A", City = "C", ZipCode = "00000", Country = "FR", State = "ST", PhoneNumber = "0", Email = "s@s.com" } };
         _events.GetEventByIdAsync(eventId).Returns(ev);
 
-        _context.Player.Any(p => p.Username == "johnd").Returns(true);
+        await _context.Player.AddAsync(new Player { Id = Guid.NewGuid(), Firstname = "John", Lastname = "Doe", Email = "any@doe.com", Username = "johnd", Password = "x" });
+        await _context.SaveChangesAsync();
 
-        var req = new Kont.backend.Models.Request.PlayerRegisterRequest { Firstname = "John", Lastname = "Doe", Email = "john@doe.com", Username = "johnd", Pin = "12345" };
+        var req = new PlayerRegisterRequest { Firstname = "John", Lastname = "Doe", Email = "john@doe.com", Username = "johnd", Pin = "12345" };
         var result = await _controller.Register(eventId, poolId, req);
         Assert.That(result, Is.InstanceOf<ConflictObjectResult>());
     }
@@ -95,40 +105,43 @@ public class PlayerControllerTests
     [Test]
     public void Login_Returns_BadRequest_When_Invalid_Payload()
     {
-        var result = _controller.Login(new PlayerController.PlayerLoginRequest { Identifier = "", Pin = "" });
+        var result = _controller.Login(new PlayerLoginRequest { Identifier = "", Pin = "" });
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
     }
 
     [Test]
     public void Login_Returns_Unauthorized_When_Not_Found()
     {
-        _context.Player.FirstOrDefault(x => x.Email == "a@a.com" || x.Username == "aa").Returns((Player?)null);
-        var result = _controller.Login(new PlayerController.PlayerLoginRequest { Identifier = "a@a.com", Pin = "12345" });
+        // no player seeded => not found
+        var result = _controller.Login(new PlayerLoginRequest { Identifier = "a@a.com", Pin = "12345" });
         Assert.That(result, Is.InstanceOf<UnauthorizedObjectResult>());
     }
 
     [Test]
-    public void Login_Returns_Unauthorized_When_Bad_Pin()
+    public async Task Login_Returns_Unauthorized_When_Bad_Pin()
     {
         var p = new Player { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Username = "u", Password = "00000" };
-        _context.Player.FirstOrDefault(x => x.Email == "e@e.com" || x.Username == "u").Returns(p);
-        var result = _controller.Login(new PlayerController.PlayerLoginRequest { Identifier = "e@e.com", Pin = "12345" });
+        await _context.Player.AddAsync(p);
+        await _context.SaveChangesAsync();
+        var result = _controller.Login(new PlayerLoginRequest { Identifier = "e@e.com", Pin = "12345" });
         Assert.That(result, Is.InstanceOf<UnauthorizedObjectResult>());
     }
 
     [Test]
-    public void Login_Returns_Ok_When_Credentials_Valid()
+    public async Task Login_Returns_Ok_When_Credentials_Valid()
     {
         var p = new Player { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Username = "u", Password = "12345" };
-        _context.Player.FirstOrDefault(x => x.Email == "e@e.com" || x.Username == "u").Returns(p);
-        var result = _controller.Login(new PlayerController.PlayerLoginRequest { Identifier = "e@e.com", Pin = "12345" });
+        await _context.Player.AddAsync(p);
+        await _context.SaveChangesAsync();
+        var result = _controller.Login(new PlayerLoginRequest { Identifier = "e@e.com", Pin = "12345" });
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
     }
 
     [Test]
-    public void CheckEmail_Returns_Availability()
+    public async Task CheckEmail_Returns_Availability()
     {
-        _context.Player.Any(p => p.Email == "e@e.com").Returns(true);
+        await _context.Player.AddAsync(new Player { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "e@e.com", Username = "ux", Password = "p" });
+        await _context.SaveChangesAsync();
         var r1 = _controller.CheckEmail("e@e.com") as OkObjectResult;
         var r2 = _controller.CheckEmail("new@e.com") as OkObjectResult;
         Assert.That(r1, Is.Not.Null);
@@ -136,9 +149,10 @@ public class PlayerControllerTests
     }
 
     [Test]
-    public void CheckUsername_Returns_Availability()
+    public async Task CheckUsername_Returns_Availability()
     {
-        _context.Player.Any(p => p.Username == "u").Returns(true);
+        await _context.Player.AddAsync(new Player { Id = Guid.NewGuid(), Firstname = "F", Lastname = "L", Email = "ux@e.com", Username = "u", Password = "p" });
+        await _context.SaveChangesAsync();
         var r1 = _controller.CheckUsername("u") as OkObjectResult;
         var r2 = _controller.CheckUsername("newu") as OkObjectResult;
         Assert.That(r1, Is.Not.Null);

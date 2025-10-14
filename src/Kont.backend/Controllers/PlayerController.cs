@@ -1,16 +1,14 @@
 using Kont.backend.DAL;
 using Kont.backend.Services;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-// using kept minimal; fully qualify types below
 using Kont.backend.Models.Request;
 using Kont.backend.DAL.DatabaseContext;
+using Microsoft.EntityFrameworkCore;
 
 namespace Kont.backend.Controllers;
 
 [Route("[controller]")]
 [ApiController]
-[Authorize(Roles = nameof(RoleType.Player))]
 public class PlayerController : ControllerBase
 {
     private readonly IEventsService _eventsService;
@@ -22,20 +20,54 @@ public class PlayerController : ControllerBase
         _context = context;
     }
 
-    [HttpGet("{id}")]
-    [AllowAnonymous]
+    [HttpPost("login")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public IActionResult Login([FromBody] PlayerLoginRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Identifier) || string.IsNullOrWhiteSpace(request.Pin))
+            return BadRequest(new { message = "Invalid payload" });
+
+        var player = _context.Player.FirstOrDefault(p => p.Email == request.Identifier || p.Username == request.Identifier);
+        if (player == null) return Unauthorized(new { code = "not_found", message = "Compte introuvable" });
+        if (player.Password != request.Pin) return Unauthorized(new { code = "bad_pin", message = "Code PIN invalide" });
+
+        return Ok(new { playerId = player.Id });
+    }
+
+    private async Task<(Event? ev, Pool? pool, IActionResult? error)> GetEventAndPool(Guid eventId, Guid poolId)
+    {
+        var ev = await _eventsService.GetEventByIdAsync(eventId);
+        if (ev == null) return (null, null, NotFound(new { message = "Event not found" }));
+        var pool = ev.Pools.FirstOrDefault(p => p.Id == poolId);
+        if (pool == null) return (ev, null, NotFound(new { message = "Pool not found" }));
+        return (ev, pool, null);
+    }
+
+    private static PlayerRegistration BuildRegistration(Player player, Pool pool)
+    {
+        return new PlayerRegistration
+        {
+            Id = Guid.NewGuid(),
+            Player = player,
+            Pool = pool,
+            PlayerType = Kont.backend.DAL.PlayerType.Player
+        };
+    }
+
+    [HttpGet("{eventId}")]
     [ProducesResponseType(typeof(Kont.backend.Models.Response.PlayerEventInfoResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetEventById(Guid eventId)
     {
-        var ev = await _eventsService.GetEventByIdAsync(id);
+        var ev = await _eventsService.GetEventByIdAsync(eventId);
         if (ev == null) return NotFound(new { message = "Event not found" });
         var location = ev.Site != null ? $"{ev.Site.Name}\n{ev.Site.Address}\n{ev.Site.City}" : string.Empty;
         return Ok(new Kont.backend.Models.Response.PlayerEventInfoResponse { Name = ev.Name, StartDate = ev.StartedAt, EndDate = ev.EndedAt, Location = location });
     }
 
     [HttpPost("{eventId}/{poolId}/register")]
-    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -44,10 +76,8 @@ public class PlayerController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Pin))
             return BadRequest(new { message = "Invalid payload" });
 
-        var ev = await _eventsService.GetEventByIdAsync(eventId);
-        if (ev == null) return NotFound(new { message = "Event not found" });
-        var pool = ev.Pools.FirstOrDefault(p => p.Id == poolId);
-        if (pool == null) return NotFound(new { message = "Pool not found" });
+        var (_, pool, error) = await GetEventAndPool(eventId, poolId);
+        if (error != null) return error;
 
         // Conflicts: email or username already taken
         var emailTaken = _context.Player.Any(p => p.Email == request.Email);
@@ -64,58 +94,60 @@ public class PlayerController : ControllerBase
             Username = request.Username,
             Password = request.Pin
         };
-        var registration = new Kont.backend.DAL.PlayerRegistration
-        {
-            Id = Guid.NewGuid(),
-            Player = player,
-            Pool = pool,
-            PlayerType = Kont.backend.DAL.PlayerType.Player
-        };
+        _context.Entry(pool!).State = EntityState.Unchanged;
+        var registration = BuildRegistration(player, pool!);
         _context.Player.Add(player);
         _context.PlayerRegistration.Add(registration);
         await _context.SaveChangesAsync();
         return Created(string.Empty, new { registration.Id });
     }
 
-    public class PlayerLoginRequest
-    {
-        public string Identifier { get; set; } = string.Empty; // email or username
-        public string Pin { get; set; } = string.Empty;
-    }
-
-    [HttpPost("login")]
-    [AllowAnonymous]
+    [HttpPost("{eventId}/{poolId}/login")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public IActionResult Login([FromBody] PlayerLoginRequest request)
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Login(Guid eventId, Guid poolId, [FromBody] PlayerLoginRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Identifier) || string.IsNullOrWhiteSpace(request.Pin))
             return BadRequest(new { message = "Invalid payload" });
 
+        var (_, pool, error) = await GetEventAndPool(eventId, poolId);
+        if (error != null) return error;
+
         var player = _context.Player.FirstOrDefault(p => p.Email == request.Identifier || p.Username == request.Identifier);
         if (player == null) return Unauthorized(new { code = "not_found", message = "Compte introuvable" });
         if (player.Password != request.Pin) return Unauthorized(new { code = "bad_pin", message = "Code PIN invalide" });
-        return Ok(new { playerId = player.Id });
+
+        var alreadyRegistered = _context.PlayerRegistration.Any(r => r.Player.Id == player.Id && r.Pool.Id == pool!.Id);
+        if (alreadyRegistered)
+        {
+            return Ok(new { playerId = player.Id, registration = "exists" });
+        }
+
+        _context.Entry(pool!).State = EntityState.Unchanged;
+        var registration = BuildRegistration(player, pool!);
+        _context.PlayerRegistration.Add(registration);
+        await _context.SaveChangesAsync();
+        return Created(string.Empty, new { registration.Id });
     }
 
     [HttpGet("check-email")] 
-    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult CheckEmail([FromQuery] string email)
     {
         if (string.IsNullOrWhiteSpace(email)) return Ok(new { available = false });
-        var exists = _context.Player.Any(p => p.Email == email);
+        var exists = _context.Player.Any(p => p.Email.ToUpper() == email.ToUpper());
         return Ok(new { available = !exists });
     }
 
     [HttpGet("check-username")] 
-    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult CheckUsername([FromQuery] string username)
     {
         if (string.IsNullOrWhiteSpace(username)) return Ok(new { available = false });
-        var exists = _context.Player.Any(p => p.Username == username);
+        var exists = _context.Player.Any(p => p.Username.ToUpper() == username.ToUpper());
         return Ok(new { available = !exists });
     }
 }
